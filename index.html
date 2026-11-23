@@ -163,3 +163,160 @@
       statusEl.style.color = '#ff5252';
     }
   });
+  function parseJsonCards(raw) {
+    let items = [];
+    if (Array.isArray(raw)) items = raw;
+    else if (raw && typeof raw === 'object') {
+      if (Array.isArray(raw.cards)) items = raw.cards;
+      else if (Array.isArray(raw.data)) items = raw.data;
+      else if (Array.isArray(raw.keys)) items = raw.keys;
+      else if (raw.Card || raw.blocks) items = Array.of(raw);
+      else items = Object.entries(raw).map(([k, v]) => Object.assign({ name: k }, typeof v === 'object' ? v : { uid: v }));
+    }
+
+    return items.map((item, idx) => {
+      const name = item.name || item.nick || item.title || item.label || ('Ключ #' + (idx + 1));
+      let uid = String(item.uid || item.UID || (item.Card && item.Card.UID) || '').replace(/[^0-9a-fA-F]/g, '');
+      let atqa = String(item.atqa || item.ATQA || (item.Card && item.Card.ATQA) || '0400').replace(/[^0-9a-fA-F]/g, '').padEnd(4, '0').slice(0, 4);
+      let sak = String(item.sak || item.SAK || (item.Card && item.Card.SAK) || '08').replace(/[^0-9a-fA-F]/g, '').padEnd(2, '0').slice(0, 2);
+
+      let blocks = [];
+      const rawBlocks = item.blocks || item.dump || item.sectors;
+      if (Array.isArray(rawBlocks)) {
+        blocks = rawBlocks.map(b => String(b).replace(/[^0-9a-fA-F]/g, '').padEnd(32, '0').slice(0, 32));
+      } else if (rawBlocks && typeof rawBlocks === 'object') {
+        for (let i = 0; i < 64; i++) {
+          const b = rawBlocks[i] || rawBlocks[String(i)] || '0'.repeat(32);
+          blocks.push(String(b).replace(/[^0-9a-fA-F]/g, '').padEnd(32, '0').slice(0, 32));
+        }
+      }
+
+      if (!uid && blocks.length > 0) uid = blocks.at(0).slice(0, 8);
+      if (!uid) uid = '11223344';
+
+      if (blocks.length === 0) {
+        const u = uid.padEnd(8, '0').slice(0, 8);
+        const bcc = (parseInt(u.slice(0,2),16) ^ parseInt(u.slice(2,4),16) ^ parseInt(u.slice(4,6),16) ^ parseInt(u.slice(6,8),16)).toString(16).padStart(2,'0');
+        blocks.push((u + bcc + sak + atqa + '0000000000000000').padEnd(32, '0'));
+        for (let i = 1; i < 64; i++) blocks.push(i % 4 === 3 ? 'FFFFFFFFFFFFFF078069FFFFFFFFFFFF' : '0'.repeat(32));
+      }
+      while (blocks.length < 64) blocks.push('0'.repeat(32));
+
+      return { name: String(name), uid: uid.toUpperCase(), atqa, sak, blocks };
+    });
+  }
+
+  document.getElementById('fileInput').addEventListener('change', (e) => {
+    const file = e.target.files.item(0);
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        allCards = parseJsonCards(JSON.parse(ev.target.result));
+        selectedIndices = [];
+        searchInput.style.display = 'block';
+        btnClear.style.display = 'block';
+        log('Загружено ключей: ' + allCards.length);
+        renderCards();
+        updateWriteButton();
+      } catch (err) {
+        alert('Ошибка JSON: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  searchInput.addEventListener('input', () => renderCards());
+  btnClear.addEventListener('click', () => { selectedIndices = []; renderCards(); updateWriteButton(); });
+
+  function toggleCard(idx) {
+    const pos = selectedIndices.indexOf(idx);
+    if (pos !== -1) selectedIndices.splice(pos, 1);
+    else {
+      if (selectedIndices.length >= 8) { alert('Максимум 8 ключей'); return; }
+      selectedIndices.push(idx);
+    }
+    renderCards();
+    updateWriteButton();
+  }
+
+  function renderCards() {
+    const query = searchInput.value.toLowerCase();
+    cardsListEl.innerHTML = '';
+    allCards.forEach((card, idx) => {
+      if (query && !card.name.toLowerCase().includes(query) && !card.uid.toLowerCase().includes(query)) return;
+      const slotPos = selectedIndices.indexOf(idx);
+      const div = document.createElement('div');
+      div.className = 'card-item' + (slotPos !== -1 ? ' selected' : '');
+      const badge = slotPos !== -1 ? '<div class="slot-badge">Слот ' + (slotPos + 1) + '</div>' : '';
+      div.innerHTML = '<div class="card-info"><div class="card-name">' + card.name + '</div><div class="card-uid">UID: ' + card.uid + '</div></div>' + badge;
+      div.addEventListener('click', () => toggleCard(idx));
+      cardsListEl.appendChild(div);
+    });
+  }
+
+  function updateWriteButton() {
+    const count = selectedIndices.length;
+    btnClear.textContent = 'Снять выделение (' + count + '/8)';
+    btnWrite.textContent = count > 0 ? 'Записать в слоты 1–' + count : 'Выберите ключи (0 / 8)';
+    btnWrite.disabled = !(bleDevice && bleDevice.gatt && bleDevice.gatt.connected && count > 0);
+  }
+
+  btnWrite.addEventListener('click', async () => {
+    btnWrite.disabled = true;
+    logEl.textContent = '';
+    try {
+      await sendCmd(1001, Uint8Array.of(0));
+      for (let i = 0; i < selectedIndices.length; i++) {
+        const card = allCards.at(selectedIndices.at(i));
+        const slot = i;
+        log('[Слот ' + (i + 1) + '] ' + card.name + ' (' + card.uid + ')...');
+        await sendCmd(1004, Uint8Array.of(slot, 0x03, 0xe9));
+        await sendCmd(1005, Uint8Array.of(slot, 0x03, 0xe9));
+        await sendCmd(1006, Uint8Array.of(slot, 2, 1));
+        await sendCmd(1003, Uint8Array.of(slot));
+
+        let nickBytes = new TextEncoder().encode(card.name).slice(0, 32);
+        if (nickBytes.length === 0) nickBytes = new TextEncoder().encode('Slot ' + (i + 1));
+        const nickPayload = new Uint8Array(2 + nickBytes.length);
+        nickPayload.set(Uint8Array.of(slot, 2), 0);
+        nickPayload.set(nickBytes, 2);
+        await sendCmd(1007, nickPayload);
+
+        await sendCmd(4015, Uint8Array.of(0));
+        await sendCmd(4004, Uint8Array.of(0));
+        await sendCmd(4017, Uint8Array.of(0));
+        await sendCmd(4011, Uint8Array.of(0));
+        await sendCmd(4013, Uint8Array.of(0));
+
+        const uidB = hexToBytes(card.uid);
+        const atqaB = hexToBytes(card.atqa);
+        const sakB = hexToBytes(card.sak);
+        const antiColl = new Uint8Array(1 + uidB.length + 4);
+        let p = 0;
+        antiColl.set(Uint8Array.of(uidB.length), p++);
+        antiColl.set(uidB, p); p += uidB.length;
+        antiColl.set(atqaB.slice(0, 2), p); p += 2;
+        antiColl.set(Uint8Array.of(sakB.at(0) || 0x08, 0), p);
+        await sendCmd(4001, antiColl);
+
+        for (let offset = 0; offset < 64; offset += 16) {
+          const blockBytes = hexToBytes(card.blocks.slice(offset, offset + 16).join(''));
+          const writePayload = new Uint8Array(1 + blockBytes.length);
+          writePayload.set(Uint8Array.of(offset), 0);
+          writePayload.set(blockBytes, 1);
+          await sendCmd(4000, writePayload);
+        }
+      }
+      await sendCmd(1003, Uint8Array.of(0));
+      await sendCmd(1009);
+      log('✅ Готово! Сохранено в память.');
+    } catch (e) {
+      log('❌ Ошибка: ' + e.message);
+    } finally {
+      updateWriteButton();
+    }
+  });
+</script>
+</body>
+</html>
