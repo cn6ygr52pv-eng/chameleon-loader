@@ -6,7 +6,7 @@
 <title>Chameleon Ultra Batch Loader</title>
 <style>
   :root { --bg: #121212; --card: #1e1e1e; --accent: #00e676; --text: #ffffff; --muted: #9e9e9e; }
-  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 130px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 140px; }
   h2 { margin: 0 0 12px 0; font-size: 20px; }
   .panel { background: var(--card); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
   button { background: var(--accent); color: #000; border: none; border-radius: 10px; padding: 12px 16px; font-weight: 700; font-size: 15px; width: 100%; cursor: pointer; }
@@ -29,7 +29,7 @@
 
 <div class="panel">
   <button id="btnConnect">1. Подключить Chameleon Ultra</button>
-  <div id="status" style="margin-top:8px; font-size:13px; color:var(--muted);">Статус: Не подключено</div>
+  <div id="status" style="margin-top:8px; font-size:13px; color:var(--muted);">Статус: Готов к подключению</div>
 </div>
 
 <div class="panel">
@@ -48,10 +48,68 @@
 
 <script type="module">
   import { Buffer, ChameleonUltra, DeviceMode, FreqType, Mf1EmuWriteMode, Slot, TagType } from 'https://jsdelivr.net';
-  import WebbleAdapter from 'https://jsdelivr.net';
+
+  const NUS_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+  const NUS_TX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+  const NUS_RX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+  class BluefyBleAdapter {
+    name = 'webble';
+    device = null;
+    txChar = null;
+    rxChar = null;
+    open = false;
+
+    async install({ ultra }) {
+      ultra.addHook('connect', async (ctx, next) => {
+        if (!navigator.bluetooth) throw new Error('Web Bluetooth не поддерживается. Откройте страницу в браузере Bluefy!');
+        this.device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: [NUS_SERVICE] }],
+          optionalServices: [NUS_SERVICE]
+        });
+        const server = await this.device.gatt.connect();
+        const service = await server.getPrimaryService(NUS_SERVICE);
+        this.txChar = await service.getCharacteristic(NUS_TX);
+        this.rxChar = await service.getCharacteristic(NUS_RX);
+
+        let rxController;
+        const readable = new ReadableStream({
+          start(controller) { rxController = controller; }
+        });
+
+        await this.rxChar.startNotifications();
+        this.rxChar.addEventListener('characteristicvaluechanged', (e) => {
+          const val = new Uint8Array(e.target.value.buffer);
+          rxController.enqueue(val);
+        });
+
+        const txChar = this.txChar;
+        const writable = new WritableStream({
+          async write(chunk) {
+            const data = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+            for (let i = 0; i < data.length; i += 20) {
+              await txChar.writeValueWithoutResponse(data.slice(i, i + 20));
+            }
+          }
+        });
+
+        this.open = true;
+        this.device.addEventListener('gattserverdisconnected', () => { this.open = false; });
+
+        ultra.port = {
+          readable,
+          writable,
+          isOpen: () => this.open && this.device?.gatt?.connected,
+          isDfu: () => false
+        };
+        await next();
+      });
+      return this;
+    }
+  }
 
   const ultra = new ChameleonUltra();
-  ultra.use(new WebbleAdapter());
+  await ultra.use(new BluefyBleAdapter());
 
   let allCards = [];
   let selectedIndices = [];
@@ -71,14 +129,15 @@
 
   btnConnect.onclick = async () => {
     try {
-      statusEl.textContent = 'Подключение...';
+      statusEl.textContent = 'Поиск Chameleon Ultra...';
+      statusEl.style.color = '#ffffff';
       await ultra.connect();
       const ver = await ultra.cmdGetAppVersion();
-      statusEl.textContent = `Подключено! Прошивка: v${ver}`;
+      statusEl.textContent = 'Подключено! Прошивка: v' + ver;
       statusEl.style.color = '#00e676';
       updateWriteButton();
     } catch (e) {
-      statusEl.textContent = 'Ошибка BLE: ' + e.message;
+      statusEl.textContent = 'Ошибка: ' + e.message;
       statusEl.style.color = '#ff5252';
     }
   };
@@ -90,15 +149,16 @@
     } else if (raw && typeof raw === 'object') {
       if (Array.isArray(raw.cards)) items = raw.cards;
       else if (Array.isArray(raw.data)) items = raw.data;
+      else if (Array.isArray(raw.keys)) items = raw.keys;
       else if (raw.Card || raw.blocks) items = [raw];
       else items = Object.entries(raw).map(([k, v]) => ({ name: k, ...(typeof v === 'object' ? v : { uid: v }) }));
     }
 
     return items.map((item, idx) => {
-      const name = item.name || item.nick || item.title || item.label || `Ключ #${idx + 1}`;
-      let uid = (item.uid || item.Card?.UID || '').replace(/[^0-9a-fA-F]/g, '');
-      let atqa = (item.atqa || item.Card?.ATQA || '0400').replace(/[^0-9a-fA-F]/g, '').padEnd(4, '0').slice(0, 4);
-      let sak = (item.sak || item.Card?.SAK || '08').replace(/[^0-9a-fA-F]/g, '').padEnd(2, '0').slice(0, 2);
+      const name = item.name || item.nick || item.title || item.label || ('Ключ #' + (idx + 1));
+      let uid = String(item.uid || item.UID || item.Card?.UID || '').replace(/[^0-9a-fA-F]/g, '');
+      let atqa = String(item.atqa || item.ATQA || item.Card?.ATQA || '0400').replace(/[^0-9a-fA-F]/g, '').padEnd(4, '0').slice(0, 4);
+      let sak = String(item.sak || item.SAK || item.Card?.SAK || '08').replace(/[^0-9a-fA-F]/g, '').padEnd(2, '0').slice(0, 2);
 
       let blocks = [];
       const rawBlocks = item.blocks || item.dump || item.sectors;
@@ -114,7 +174,6 @@
       if (!uid && blocks[0]) uid = blocks[0].slice(0, 8);
       if (!uid) uid = '11223344';
 
-      // Если дампа не было, создаем 0-й блок с правильным BCC и дефолтными трейлерами секторов
       if (blocks.length === 0) {
         const u = uid.padEnd(8, '0').slice(0, 8);
         const bcc = (parseInt(u.slice(0,2),16) ^ parseInt(u.slice(2,4),16) ^ parseInt(u.slice(4,6),16) ^ parseInt(u.slice(6,8),16)).toString(16).padStart(2,'0');
@@ -140,6 +199,7 @@
         selectedIndices = [];
         searchInput.style.display = 'block';
         btnClear.style.display = 'block';
+        log('Загружено ключей из файла: ' + allCards.length);
         renderCards();
         updateWriteButton();
       } catch (err) {
@@ -179,53 +239,3 @@
       if (query && !card.name.toLowerCase().includes(query) && !card.uid.toLowerCase().includes(query)) return;
       const slotPos = selectedIndices.indexOf(idx);
       const div = document.createElement('div');
-      div.className = 'card-item' + (slotPos !== -1 ? ' selected' : '');
-      div.innerHTML = `
-        <div class="card-info">
-          <div class="card-name">${card.name}</div>
-          <div class="card-uid">UID: ${card.uid} | SAK: ${card.sak}</div>
-        </div>
-        ${slotPos !== -1 ? `<div class="slot-badge">Слот ${slotPos + 1}</div>` : ''}
-      `;
-      div.onclick = () => toggleCard(idx);
-      cardsListEl.appendChild(div);
-    });
-  }
-
-  function updateWriteButton() {
-    const count = selectedIndices.length;
-    btnClear.textContent = `Снять выделение (${count}/8)`;
-    btnWrite.textContent = count > 0 ? `Записать в слоты 1–${count}` : 'Выберите ключи (0 / 8)';
-    btnWrite.disabled = !(ultra.isConnected() && count > 0);
-  }
-
-  btnWrite.onclick = async () => {
-    btnWrite.disabled = true;
-    logEl.textContent = '';
-    try {
-      await ultra.cmdChangeDeviceMode(DeviceMode.EMULATOR);
-      const slotEnums = [Slot.SLOT_1, Slot.SLOT_2, Slot.SLOT_3, Slot.SLOT_4, Slot.SLOT_5, Slot.SLOT_6, Slot.SLOT_7, Slot.SLOT_8];
-
-      for (let i = 0; i < selectedIndices.length; i++) {
-        const card = allCards[selectedIndices[i]];
-        const slot = slotEnums[i];
-        log(`[Слот ${i + 1}] Запись: ${card.name} (${card.uid})...`);
-
-        await ultra.cmdSlotChangeTagType(slot, TagType.MIFARE_1024);
-        await ultra.cmdSlotResetTagType(slot, TagType.MIFARE_1024);
-        await ultra.cmdSlotSetEnable(slot, FreqType.HF, true);
-        await ultra.cmdSlotSetActive(slot);
-
-        // Имя слота (до 32 байт UTF-8)
-        let nickBuf = Buffer.from(card.name, 'utf8');
-        if (nickBuf.length > 32) nickBuf = nickBuf.subarray(0, 32);
-        const nick = nickBuf.toString('utf8') || `Slot ${i + 1}`;
-        await ultra.cmdSlotSetFreqName(slot, FreqType.HF, nick);
-
-        // Настройки эмулятора M1 и антиколлизии
-        await ultra.cmdMf1SetAntiCollMode(false);
-        await ultra.cmdMf1SetDetectionEnable(false);
-        await ultra.cmdMf1SetWriteMode(Mf1EmuWriteMode.NORMAL);
-        await ultra.cmdMf1SetGen1aMode(false);
-        await ultra.cmdMf1SetGen2Mode(false);
-
