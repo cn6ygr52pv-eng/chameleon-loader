@@ -82,31 +82,30 @@
     const clean = hex.replace(/[^0-9a-fA-F]/g, '');
     const arr = new Uint8Array(clean.length / 2);
     for (let i = 0; i < arr.length; i++) {
-      arr[i] = parseInt(clean.substr(i * 2, 2), 16);
+      arr.set(Uint8Array.of(parseInt(clean.substr(i * 2, 2), 16)), i);
     }
     return arr;
   }
 
   function lrc(bytes) {
     let sum = 0;
-    for (let i = 0; i < bytes.length; i++) sum = (sum + bytes[i]) & 0xff;
+    for (let i = 0; i < bytes.length; i++) sum = (sum + bytes.at(i)) & 0xff;
     return (256 - sum) & 0xff;
   }
 
   function buildFrame(cmd, dataBytes) {
     const data = dataBytes || new Uint8Array(0);
     const frame = new Uint8Array(10 + data.length);
-    frame[0] = 0x11;
-    frame[1] = 0xef;
-    frame[2] = (cmd >> 8) & 0xff;
-    frame[3] = cmd & 0xff;
-    frame[4] = 0x00;
-    frame[5] = 0x00;
-    frame[6] = (data.length >> 8) & 0xff;
-    frame[7] = data.length & 0xff;
-    frame[8] = lrc(frame.slice(2, 8));
+    const header = Uint8Array.of(
+      0x11, 0xef,
+      (cmd >> 8) & 0xff, cmd & 0xff,
+      0x00, 0x00,
+      (data.length >> 8) & 0xff, data.length & 0xff
+    );
+    frame.set(header, 0);
+    frame.set(Uint8Array.of(lrc(frame.slice(2, 8))), 8);
     frame.set(data, 9);
-    frame[9 + data.length] = lrc(frame.slice(9, 9 + data.length));
+    frame.set(Uint8Array.of(lrc(frame.slice(9, 9 + data.length))), 9 + data.length);
     return frame;
   }
 
@@ -118,19 +117,19 @@
     rxBuffer = merged;
 
     while (rxBuffer.length >= 10) {
-      if (rxBuffer[0] !== 0x11 || rxBuffer[1] !== 0xef) {
+      if (rxBuffer.at(0) !== 0x11 || rxBuffer.at(1) !== 0xef) {
         rxBuffer = rxBuffer.slice(1);
         continue;
       }
-      const len = (rxBuffer[6] << 8) | rxBuffer[7];
+      const len = (rxBuffer.at(6) << 8) | rxBuffer.at(7);
       const totalLen = 10 + len;
       if (rxBuffer.length < totalLen) break;
 
       const packet = rxBuffer.slice(0, totalLen);
       rxBuffer = rxBuffer.slice(totalLen);
 
-      const cmd = (packet[2] << 8) | packet[3];
-      const status = (packet[4] << 8) | packet[5];
+      const cmd = (packet.at(2) << 8) | packet.at(3);
+      const status = (packet.at(4) << 8) | packet.at(5);
       const data = packet.slice(9, 9 + len);
 
       if (pendingResolver && pendingResolver.cmd === cmd) {
@@ -167,15 +166,16 @@
 
   btnConnect.addEventListener('click', async () => {
     try {
-      statusEl.textContent = 'Открытие окна Bluetooth...';
+      statusEl.textContent = 'Нажата кнопка. Проверка Bluetooth...';
       statusEl.style.color = '#ffffff';
 
       if (!navigator.bluetooth) {
-        throw new Error('В этом браузере нет Bluetooth. Откройте ссылку в приложении Bluefy!');
+        throw new Error('navigator.bluetooth недоступен! Убедитесь, что открыли сайт в приложении Bluefy и разрешили Bluetooth в настройках iPhone.');
       }
 
+      statusEl.textContent = 'Открытие списка BLE устройств...';
       bleDevice = await navigator.bluetooth.requestDevice({
-        filters: [{ services: [NUS_SERVICE] }],
+        acceptAllDevices: true,
         optionalServices: [NUS_SERVICE]
       });
 
@@ -189,12 +189,12 @@
       rxChar.addEventListener('characteristicvaluechanged', handleNotifications);
 
       const verResp = await sendCmd(1000);
-      const ver = verResp.data[0] + '.' + verResp.data[1];
+      const ver = verResp.data.at(0) + '.' + verResp.data.at(1);
       statusEl.textContent = 'Подключено! Прошивка: v' + ver;
       statusEl.style.color = '#00e676';
       updateWriteButton();
     } catch (e) {
-      statusEl.textContent = 'Ошибка: ' + e.message;
+      statusEl.textContent = 'Ошибка BLE: ' + (e.message || e);
       statusEl.style.color = '#ff5252';
     }
   });
@@ -207,7 +207,7 @@
       if (Array.isArray(raw.cards)) items = raw.cards;
       else if (Array.isArray(raw.data)) items = raw.data;
       else if (Array.isArray(raw.keys)) items = raw.keys;
-      else if (raw.Card || raw.blocks) items = [raw];
+      else if (raw.Card || raw.blocks) items = Array.of(raw);
       else items = Object.entries(raw).map(([k, v]) => Object.assign({ name: k }, typeof v === 'object' ? v : { uid: v }));
     }
 
@@ -228,15 +228,15 @@
         }
       }
 
-      if (!uid && blocks.length > 0) uid = blocks[0].slice(0, 8);
+      if (!uid && blocks.length > 0) uid = blocks.at(0).slice(0, 8);
       if (!uid) uid = '11223344';
 
       if (blocks.length === 0) {
         const u = uid.padEnd(8, '0').slice(0, 8);
         const bcc = (parseInt(u.slice(0,2),16) ^ parseInt(u.slice(2,4),16) ^ parseInt(u.slice(4,6),16) ^ parseInt(u.slice(6,8),16)).toString(16).padStart(2,'0');
-        blocks.push((u + bcc + sak + atqa + '0000000000000000').padEnd(32, '0'));
-        for (let i = 1; i < 64; i++) {
 Используйте код с осторожностью.
+blocks.push((u + bcc + sak + atqa + '0000000000000000').padEnd(32, '0'));
+for (let i = 1; i < 64; i++) {
 blocks.push(i % 4 === 3 ? 'FFFFFFFFFFFFFF078069FFFFFFFFFFFF' : '0'.repeat(32));
 }
 }
@@ -245,7 +245,7 @@ return { name: String(name), uid: uid.toUpperCase(), atqa: atqa, sak: sak, block
 });
 }
 document.getElementById('fileInput').addEventListener('change', (e) => {
-const file = e.target.files[0];
+const file = e.target.files.item(0);
 if (!file) return;
 const reader = new FileReader();
 reader.onload = (ev) => {
@@ -295,7 +295,7 @@ div.className = 'card-item' + (slotPos !== -1 ? ' selected' : '');
 const badgeHtml = slotPos !== -1 ? 'Слот ' + (slotPos + 1) + '' : '';
 div.innerHTML =
 '' +
-'' +  + '' +
+'' + card.name + '' +
 'UID: ' + card.uid + ' | SAK: ' + card.sak + '' +
 '' + badgeHtml;
 div.addEventListener('click', () => toggleCard(idx));
@@ -312,50 +312,49 @@ btnWrite.addEventListener('click', async () => {
 btnWrite.disabled = true;
 logEl.textContent = '';
 try {
-await sendCmd(1001, new Uint8Array([0]));
+await sendCmd(1001, Uint8Array.of(0));
 for (let i = 0; i < selectedIndices.length; i++) {
-const card = allCards[selectedIndices[i]];
+const card = allCards.at(selectedIndices.at(i));
 const slot = i;
-log('[Слот ' + (i + 1) + '] Запись: ' +  + ' (' + card.uid + ')...');
-await sendCmd(1004, new Uint8Array([slot, 0x03, 0xe9]));
-await sendCmd(1005, new Uint8Array([slot, 0x03, 0xe9]));
-await sendCmd(1006, new Uint8Array([slot, 2, 1]));
-await sendCmd(1003, new Uint8Array([slot]));
+log('[Слот ' + (i + 1) + '] Запись: ' + card.name + ' (' + card.uid + ')...');
+await sendCmd(1004, Uint8Array.of(slot, 0x03, 0xe9));
+await sendCmd(1005, Uint8Array.of(slot, 0x03, 0xe9));
+await sendCmd(1006, Uint8Array.of(slot, 2, 1));
+await sendCmd(1003, Uint8Array.of(slot));
 const encoder = new TextEncoder();
-let nickBytes = encoder.encode();
+let nickBytes = encoder.encode(card.name);
 if (nickBytes.length > 32) nickBytes = nickBytes.slice(0, 32);
 if (nickBytes.length === 0) nickBytes = encoder.encode('Slot ' + (i + 1));
 const nickPayload = new Uint8Array(2 + nickBytes.length);
-nickPayload[0] = slot;
-nickPayload[1] = 2;
+nickPayload.set(Uint8Array.of(slot, 2), 0);
 nickPayload.set(nickBytes, 2);
 await sendCmd(1007, nickPayload);
-await sendCmd(4015, new Uint8Array([0]));
-await sendCmd(4004, new Uint8Array([0]));
-await sendCmd(4017, new Uint8Array([0]));
-await sendCmd(4011, new Uint8Array([0]));
-await sendCmd(4013, new Uint8Array([0]));
+await sendCmd(4015, Uint8Array.of(0));
+await sendCmd(4004, Uint8Array.of(0));
+await sendCmd(4017, Uint8Array.of(0));
+await sendCmd(4011, Uint8Array.of(0));
+await sendCmd(4013, Uint8Array.of(0));
 const uidB = hexToBytes(card.uid);
 const atqaB = hexToBytes(card.atqa);
 const sakB = hexToBytes(card.sak);
 const antiCollPayload = new Uint8Array(1 + uidB.length + 2 + 1 + 1);
 let p = 0;
-antiCollPayload[p++] = uidB.length;
+antiCollPayload.set(Uint8Array.of(uidB.length), p++);
 antiCollPayload.set(uidB, p); p += uidB.length;
 antiCollPayload.set(atqaB.slice(0, 2), p); p += 2;
-antiCollPayload[p++] = sakB[0] || 0x08;
-antiCollPayload[p++] = 0;
+antiCollPayload.set(Uint8Array.of(sakB.at(0) || 0x08), p++);
+antiCollPayload.set(Uint8Array.of(0), p++);
 await sendCmd(4001, antiCollPayload);
 for (let offset = 0; offset < 64; offset += 16) {
 const chunkHex = card.blocks.slice(offset, offset + 16).join('');
 const blockBytes = hexToBytes(chunkHex);
 const writePayload = new Uint8Array(1 + blockBytes.length);
-writePayload[0] = offset;
+writePayload.set(Uint8Array.of(offset), 0);
 writePayload.set(blockBytes, 1);
 await sendCmd(4000, writePayload);
 }
 }
-await sendCmd(1003, new Uint8Array([0]));
+await sendCmd(1003, Uint8Array.of(0));
 await sendCmd(1009);
 log('Готово! Все слоты записаны и сохранены в память.');
 } catch (e) {
@@ -364,5 +363,3 @@ log('Ошибка: ' + e.message);
 updateWriteButton();
 }
 });
-
-
