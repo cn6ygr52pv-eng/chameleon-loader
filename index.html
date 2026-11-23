@@ -9,7 +9,7 @@
   body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 150px; }
   h2 { margin: 0 0 12px 0; font-size: 20px; }
   .panel { background: var(--card); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
-  button { background: var(--accent); color: #000; border: none; border-radius: 10px; padding: 14px 16px; font-weight: 700; font-size: 16px; width: 100%; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  button { background: var(--accent); color: #000; border: none; border-radius: 10px; padding: 14px 16px; font-weight: 700; font-size: 16px; width: 100%; cursor: pointer; }
   button:disabled { background: #424242; color: #888; }
   button.secondary { background: #2c2c2c; color: #fff; margin-top: 8px; }
   input[type="file"], input[type="text"] { width: 100%; box-sizing: border-box; background: #2c2c2c; border: 1px solid #3c3c3c; color: #fff; padding: 10px; border-radius: 8px; font-size: 15px; margin-top: 8px; }
@@ -29,11 +29,11 @@
 
 <div class="panel">
   <button id="btnConnect" type="button">1. Подключить Chameleon Ultra</button>
-  <div id="status" style="margin-top:8px; font-size:13px; color:#00e676;">Скрипт активен. Нажмите кнопку выше.</div>
+  <div id="status" style="margin-top:8px; font-size:13px; color:#00e676;">Готов к работе</div>
 </div>
 
 <div class="panel">
-  <div style="font-size:14px; font-weight:600;">2. Выберите общий JSON-файл с ключами</div>
+  <div style="font-size:14px; font-weight:600;">2. Выберите JSON-файл с ключами</div>
   <input type="file" id="fileInput" accept=".json,application/json">
   <input type="text" id="searchInput" placeholder="Поиск по названию или UID..." style="display:none;">
   <button id="btnClear" type="button" class="secondary" style="display:none;">Снять выделение (0/8)</button>
@@ -47,23 +47,14 @@
 </div>
 
 <script>
-  window.onerror = function(msg, url, line) {
-    document.getElementById('status').textContent = 'JS Ошибка: ' + msg + ' (стр. ' + line + ')';
-    document.getElementById('status').style.color = '#ff5252';
-  };
-
   const NUS_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
   const NUS_TX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
   const NUS_RX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 
-  let bleDevice = null;
-  let txChar = null;
-  let rxChar = null;
+  let bleDevice = null, txChar = null, rxChar = null;
   let rxBuffer = new Uint8Array(0);
   let pendingResolver = null;
-
-  let allCards = [];
-  let selectedIndices = [];
+  let allCards = [], selectedIndices = [];
 
   const logEl = document.getElementById('log');
   const statusEl = document.getElementById('status');
@@ -96,13 +87,7 @@
   function buildFrame(cmd, dataBytes) {
     const data = dataBytes || new Uint8Array(0);
     const frame = new Uint8Array(10 + data.length);
-    const header = Uint8Array.of(
-      0x11, 0xef,
-      (cmd >> 8) & 0xff, cmd & 0xff,
-      0x00, 0x00,
-      (data.length >> 8) & 0xff, data.length & 0xff
-    );
-    frame.set(header, 0);
+    frame.set(Uint8Array.of(0x11, 0xef, (cmd >> 8) & 0xff, cmd & 0xff, 0, 0, (data.length >> 8) & 0xff, data.length & 0xff), 0);
     frame.set(Uint8Array.of(lrc(frame.slice(2, 8))), 8);
     frame.set(data, 9);
     frame.set(Uint8Array.of(lrc(frame.slice(9, 9 + data.length))), 9 + data.length);
@@ -141,23 +126,12 @@
   }
 
   async function sendCmd(cmd, dataBytes) {
-    if (!txChar) throw new Error('Нет подключения к устройству');
+    if (!txChar) throw new Error('Нет подключения');
     const frame = buildFrame(cmd, dataBytes);
-
     const respPromise = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        pendingResolver = null;
-        reject(new Error('Таймаут ответа на команду ' + cmd));
-      }, 5000);
-      pendingResolver = {
-        cmd: cmd,
-        resolve: (res) => {
-          clearTimeout(timer);
-          resolve(res);
-        }
-      };
+      const timer = setTimeout(() => { pendingResolver = null; reject(new Error('Таймаут ' + cmd)); }, 5000);
+      pendingResolver = { cmd, resolve: (res) => { clearTimeout(timer); resolve(res); } };
     });
-
     for (let i = 0; i < frame.length; i += 20) {
       await txChar.writeValueWithoutResponse(frame.slice(i, i + 20));
     }
@@ -166,200 +140,26 @@
 
   btnConnect.addEventListener('click', async () => {
     try {
-      statusEl.textContent = 'Нажата кнопка. Проверка Bluetooth...';
-      statusEl.style.color = '#ffffff';
-
-      if (!navigator.bluetooth) {
-        throw new Error('navigator.bluetooth недоступен! Убедитесь, что открыли сайт в приложении Bluefy и разрешили Bluetooth в настройках iPhone.');
-      }
-
-      statusEl.textContent = 'Открытие списка BLE устройств...';
+      statusEl.textContent = 'Поиск Chameleon Ultra...';
+      statusEl.style.color = '#fff';
       bleDevice = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
+        filters: [{ services: [NUS_SERVICE] }],
         optionalServices: [NUS_SERVICE]
       });
-
-      statusEl.textContent = 'Соединение с ' + (bleDevice.name || 'Chameleon') + '...';
+      statusEl.textContent = 'Подключение...';
       const server = await bleDevice.gatt.connect();
       const service = await server.getPrimaryService(NUS_SERVICE);
       txChar = await service.getCharacteristic(NUS_TX);
       rxChar = await service.getCharacteristic(NUS_RX);
-
       await rxChar.startNotifications();
       rxChar.addEventListener('characteristicvaluechanged', handleNotifications);
 
       const verResp = await sendCmd(1000);
-      const ver = verResp.data.at(0) + '.' + verResp.data.at(1);
-      statusEl.textContent = 'Подключено! Прошивка: v' + ver;
+      statusEl.textContent = 'Подключено! Прошивка: v' + verResp.data.at(0) + '.' + verResp.data.at(1);
       statusEl.style.color = '#00e676';
       updateWriteButton();
     } catch (e) {
-      statusEl.textContent = 'Ошибка BLE: ' + (e.message || e);
+      statusEl.textContent = 'Ошибка: ' + e.message;
       statusEl.style.color = '#ff5252';
     }
   });
-
-  function parseJsonCards(raw) {
-    let items = [];
-    if (Array.isArray(raw)) {
-      items = raw;
-    } else if (raw && typeof raw === 'object') {
-      if (Array.isArray(raw.cards)) items = raw.cards;
-      else if (Array.isArray(raw.data)) items = raw.data;
-      else if (Array.isArray(raw.keys)) items = raw.keys;
-      else if (raw.Card || raw.blocks) items = Array.of(raw);
-      else items = Object.entries(raw).map(([k, v]) => Object.assign({ name: k }, typeof v === 'object' ? v : { uid: v }));
-    }
-
-    return items.map((item, idx) => {
-      const name = item.name || item.nick || item.title || item.label || ('Ключ #' + (idx + 1));
-      let uid = String(item.uid || item.UID || (item.Card && item.Card.UID) || '').replace(/[^0-9a-fA-F]/g, '');
-      let atqa = String(item.atqa || item.ATQA || (item.Card && item.Card.ATQA) || '0400').replace(/[^0-9a-fA-F]/g, '').padEnd(4, '0').slice(0, 4);
-      let sak = String(item.sak || item.SAK || (item.Card && item.Card.SAK) || '08').replace(/[^0-9a-fA-F]/g, '').padEnd(2, '0').slice(0, 2);
-
-      let blocks = [];
-      const rawBlocks = item.blocks || item.dump || item.sectors;
-      if (Array.isArray(rawBlocks)) {
-        blocks = rawBlocks.map(b => String(b).replace(/[^0-9a-fA-F]/g, '').padEnd(32, '0').slice(0, 32));
-      } else if (rawBlocks && typeof rawBlocks === 'object') {
-        for (let i = 0; i < 64; i++) {
-          const b = rawBlocks[i] || rawBlocks[String(i)] || '0'.repeat(32);
-          blocks.push(String(b).replace(/[^0-9a-fA-F]/g, '').padEnd(32, '0').slice(0, 32));
-        }
-      }
-
-      if (!uid && blocks.length > 0) uid = blocks.at(0).slice(0, 8);
-      if (!uid) uid = '11223344';
-
-      if (blocks.length === 0) {
-        const u = uid.padEnd(8, '0').slice(0, 8);
-        const bcc = (parseInt(u.slice(0,2),16) ^ parseInt(u.slice(2,4),16) ^ parseInt(u.slice(4,6),16) ^ parseInt(u.slice(6,8),16)).toString(16).padStart(2,'0');
-Используйте код с осторожностью.
-blocks.push((u + bcc + sak + atqa + '0000000000000000').padEnd(32, '0'));
-for (let i = 1; i < 64; i++) {
-blocks.push(i % 4 === 3 ? 'FFFFFFFFFFFFFF078069FFFFFFFFFFFF' : '0'.repeat(32));
-}
-}
-while (blocks.length < 64) blocks.push('0'.repeat(32));
-return { name: String(name), uid: uid.toUpperCase(), atqa: atqa, sak: sak, blocks: blocks };
-});
-}
-document.getElementById('fileInput').addEventListener('change', (e) => {
-const file = e.target.files.item(0);
-if (!file) return;
-const reader = new FileReader();
-reader.onload = (ev) => {
-try {
-const json = JSON.parse(ev.target.result);
-allCards = parseJsonCards(json);
-selectedIndices = [];
-searchInput.style.display = 'block';
-btnClear.style.display = 'block';
-log('Загружено ключей: ' + allCards.length);
-renderCards();
-updateWriteButton();
-} catch (err) {
-alert('Ошибка чтения JSON: ' + err.message);
-}
-};
-reader.readAsText(file);
-});
-searchInput.addEventListener('input', () => renderCards());
-btnClear.addEventListener('click', () => {
-selectedIndices = [];
-renderCards();
-updateWriteButton();
-});
-function toggleCard(idx) {
-const pos = selectedIndices.indexOf(idx);
-if (pos !== -1) {
-selectedIndices.splice(pos, 1);
-} else {
-if (selectedIndices.length >= 8) {
-alert('Можно выбрать максимум 8 ключей.');
-return;
-}
-selectedIndices.push(idx);
-}
-renderCards();
-updateWriteButton();
-}
-function renderCards() {
-const query = searchInput.value.toLowerCase();
-cardsListEl.innerHTML = '';
-allCards.forEach((card, idx) => {
-if (query && !card.name.toLowerCase().includes(query) && !card.uid.toLowerCase().includes(query)) return;
-const slotPos = selectedIndices.indexOf(idx);
-const div = document.createElement('div');
-div.className = 'card-item' + (slotPos !== -1 ? ' selected' : '');
-const badgeHtml = slotPos !== -1 ? 'Слот ' + (slotPos + 1) + '' : '';
-div.innerHTML =
-'' +
-'' + card.name + '' +
-'UID: ' + card.uid + ' | SAK: ' + card.sak + '' +
-'' + badgeHtml;
-div.addEventListener('click', () => toggleCard(idx));
-cardsListEl.appendChild(div);
-});
-}
-function updateWriteButton() {
-const count = selectedIndices.length;
-btnClear.textContent = 'Снять выделение (' + count + '/8)';
-btnWrite.textContent = count > 0 ? 'Записать в слоты 1–' + count : 'Выберите ключи (0 / 8)';
-btnWrite.disabled = !(bleDevice && bleDevice.gatt && bleDevice.gatt.connected && count > 0);
-}
-btnWrite.addEventListener('click', async () => {
-btnWrite.disabled = true;
-logEl.textContent = '';
-try {
-await sendCmd(1001, Uint8Array.of(0));
-for (let i = 0; i < selectedIndices.length; i++) {
-const card = allCards.at(selectedIndices.at(i));
-const slot = i;
-log('[Слот ' + (i + 1) + '] Запись: ' + card.name + ' (' + card.uid + ')...');
-await sendCmd(1004, Uint8Array.of(slot, 0x03, 0xe9));
-await sendCmd(1005, Uint8Array.of(slot, 0x03, 0xe9));
-await sendCmd(1006, Uint8Array.of(slot, 2, 1));
-await sendCmd(1003, Uint8Array.of(slot));
-const encoder = new TextEncoder();
-let nickBytes = encoder.encode(card.name);
-if (nickBytes.length > 32) nickBytes = nickBytes.slice(0, 32);
-if (nickBytes.length === 0) nickBytes = encoder.encode('Slot ' + (i + 1));
-const nickPayload = new Uint8Array(2 + nickBytes.length);
-nickPayload.set(Uint8Array.of(slot, 2), 0);
-nickPayload.set(nickBytes, 2);
-await sendCmd(1007, nickPayload);
-await sendCmd(4015, Uint8Array.of(0));
-await sendCmd(4004, Uint8Array.of(0));
-await sendCmd(4017, Uint8Array.of(0));
-await sendCmd(4011, Uint8Array.of(0));
-await sendCmd(4013, Uint8Array.of(0));
-const uidB = hexToBytes(card.uid);
-const atqaB = hexToBytes(card.atqa);
-const sakB = hexToBytes(card.sak);
-const antiCollPayload = new Uint8Array(1 + uidB.length + 2 + 1 + 1);
-let p = 0;
-antiCollPayload.set(Uint8Array.of(uidB.length), p++);
-antiCollPayload.set(uidB, p); p += uidB.length;
-antiCollPayload.set(atqaB.slice(0, 2), p); p += 2;
-antiCollPayload.set(Uint8Array.of(sakB.at(0) || 0x08), p++);
-antiCollPayload.set(Uint8Array.of(0), p++);
-await sendCmd(4001, antiCollPayload);
-for (let offset = 0; offset < 64; offset += 16) {
-const chunkHex = card.blocks.slice(offset, offset + 16).join('');
-const blockBytes = hexToBytes(chunkHex);
-const writePayload = new Uint8Array(1 + blockBytes.length);
-writePayload.set(Uint8Array.of(offset), 0);
-writePayload.set(blockBytes, 1);
-await sendCmd(4000, writePayload);
-}
-}
-await sendCmd(1003, Uint8Array.of(0));
-await sendCmd(1009);
-log('Готово! Все слоты записаны и сохранены в память.');
-} catch (e) {
-log('Ошибка: ' + e.message);
-} finally {
-updateWriteButton();
-}
-});
