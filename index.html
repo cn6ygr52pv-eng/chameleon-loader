@@ -239,3 +239,62 @@
       if (query && !card.name.toLowerCase().includes(query) && !card.uid.toLowerCase().includes(query)) return;
       const slotPos = selectedIndices.indexOf(idx);
       const div = document.createElement('div');
+div.className = 'card-item' + (slotPos !== -1 ? ' selected' : '');
+const badgeHtml = slotPos !== -1 ? 'Слот ' + (slotPos + 1) + '' : '';
+div.innerHTML =
+'' +
+'' +  + '' +
+'UID: ' + card.uid + ' | SAK: ' + card.sak + '' +
+'' + badgeHtml;
+div.onclick = () => toggleCard(idx);
+cardsListEl.appendChild(div);
+});
+}
+function updateWriteButton() {
+const count = selectedIndices.length;
+btnClear.textContent = 'Снять выделение (' + count + '/8)';
+btnWrite.textContent = count > 0 ? 'Записать в слоты 1–' + count : 'Выберите ключи (0 / 8)';
+btnWrite.disabled = !(ultra.isConnected() && count > 0);
+}
+btnWrite.onclick = async () => {
+btnWrite.disabled = true;
+logEl.textContent = '';
+try {
+await ultra.cmdChangeDeviceMode(DeviceMode.TAG);
+const slotEnums = [Slot.SLOT_1, Slot.SLOT_2, Slot.SLOT_3, Slot.SLOT_4, Slot.SLOT_5, Slot.SLOT_6, Slot.SLOT_7, Slot.SLOT_8];
+for (let i = 0; i < selectedIndices.length; i++) {
+const card = allCards[selectedIndices[i]];
+const slot = slotEnums[i];
+log('[Слот ' + (i + 1) + '] Запись: ' +  + ' (' + card.uid + ')...');
+await ultra.cmdSlotChangeTagType(slot, TagType.MIFARE_1024);
+await ultra.cmdSlotResetTagType(slot, TagType.MIFARE_1024);
+await ultra.cmdSlotSetEnable(slot, FreqType.HF, true);
+await ultra.cmdSlotSetActive(slot);
+let nickBuf = Buffer.from(, 'utf8');
+if (nickBuf.length > 32) nickBuf = nickBuf.subarray(0, 32);
+const nick = nickBuf.toString('utf8') || ('Slot ' + (i + 1));
+await ultra.cmdSlotSetFreqName(slot, FreqType.HF, nick);
+await ultra.cmdMf1SetAntiCollMode(false);
+await ultra.cmdMf1SetDetectionEnable(false);
+await ultra.cmdMf1SetWriteMode(Mf1EmuWriteMode.NORMAL);
+await ultra.cmdMf1SetGen1aMode(false);
+await ultra.cmdMf1SetGen2Mode(false);
+await ultra.cmdHf14aSetAntiCollData({
+uid: Buffer.from(card.uid, 'hex'),
+atqa: Buffer.from(card.atqa, 'hex'),
+sak: Buffer.from(card.sak, 'hex'),
+});
+for (let offset = 0; offset < 64; offset += 16) {
+const chunkHex = card.blocks.slice(offset, offset + 16).join('');
+await ultra.cmdMf1EmuWriteBlock(offset, Buffer.from(chunkHex, 'hex'));
+}
+}
+await ultra.cmdSlotSetActive(Slot.SLOT_1);
+await ultra.cmdSlotSaveSettings();
+log('✅ Готово! Все слоты записаны и сохранены в память.');
+} catch (e) {
+log('❌ Ошибка: ' + e.message);
+} finally {
+updateWriteButton();
+}
+};
