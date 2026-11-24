@@ -73,7 +73,7 @@
   .done-tag { color: var(--accent); font-size: 11px; font-weight: 700; margin-left: 6px; }
   .slot-badge { background: var(--accent); color: var(--accent-text); font-weight: 800; padding: 4px 10px; border-radius: 6px; font-size: 13px; min-width: 52px; text-align: center; }
   .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--bar-bg); padding: 12px 16px; border-top: 1px solid var(--border); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); z-index: 10; }
-  #log { font-family: monospace; font-size: 12px; color: var(--accent); white-space: pre-wrap; max-height: 95px; overflow-y: auto; margin-top: 8px; }
+  #log { font-family: monospace; font-size: 12px; color: var(--accent); white-space: pre-wrap; max-height: 90px; overflow-y: auto; margin-top: 8px; }
   #btnTop { position: fixed; right: 16px; bottom: 135px; width: 44px; height: 44px; border-radius: 50%; background: var(--card); color: var(--accent); border: 1.5px solid var(--accent); font-size: 20px; padding: 0; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.35); z-index: 20; }
 </style>
 </head>
@@ -206,10 +206,6 @@
     return arr;
   }
 
-  function bytesToHex(bytes) {
-    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
-  }
-
   function lrc(bytes) {
     let sum = 0;
     for (let i = 0; i < bytes.length; i++) sum = (sum + bytes.at(i)) & 0xff;
@@ -256,6 +252,7 @@
       }
     }
   }
+
   async function sendCmd(cmd, dataBytes) {
     if (!txChar) throw new Error('Нет подключения');
     const frame = buildFrame(cmd, dataBytes);
@@ -267,6 +264,7 @@
       await txChar.writeValueWithoutResponse(frame.slice(i, i + 20));
     }
     const res = await respPromise;
+    // В прошивке v2.3: 0x0000 (HF_TAG_OK) и 0x0068 (DEVICE_SUCCESS) — оба означают успех
     if (res.status !== 0 && res.status !== 0x0068) {
       throw new Error('Команда ' + cmd + ' вернула ошибку 0x' + res.status.toString(16));
     }
@@ -280,7 +278,7 @@
     let html = '';
     for (let slot = 0; slot < 8; slot++) {
       try {
-        const resp = await sendCmd(1008, Uint8Array.of(slot, 1));
+        const resp = await sendCmd(1008, Uint8Array.of(slot, 1), true);
         const nick = (resp.data.length > 0) ? decoder.decode(resp.data).replace(/\0/g, '').trim() : '';
         if (nick) {
           html += '<div class="slot-pill" title="' + nick + '"><span>' + (slot + 1) + ':</span>' + nick + '</div>';
@@ -332,7 +330,7 @@
       await rxChar.startNotifications();
       rxChar.addEventListener('characteristicvaluechanged', handleNotifications);
 
-      const verResp = await sendCmd(1000, null);
+      const verResp = await sendCmd(1000, null, true);
       statusEl.textContent = 'Подключено! Прошивка: v' + verResp.data.at(0) + '.' + verResp.data.at(1);
       statusEl.style.color = 'var(--accent)';
       btnConnect.style.display = 'none';
@@ -360,11 +358,11 @@
       const name = String(item.name || item.nick || item.title || item.label || ('Ключ #' + (idx + 1))).trim();
       let uid = String(item.uid || item.UID || (item.Card && item.Card.UID) || '').replace(/[^0-9a-fA-F]/g, '').toUpperCase();
 
-      // Прямой порядок ATQA из JSON: -> '0004'
-      let atqa = '0004';
+      // В радиоэфире ISO14443A (и в команде 4001) ATQA передаётся в little-endian: -> '0400'
+      let atqa = '0400';
       const rawAtqa = item.atqa ?? item.ATQA ?? (item.Card && item.Card.ATQA);
       if (Array.isArray(rawAtqa) && rawAtqa.length >= 2) {
-        atqa = Number(rawAtqa.at(0)).toString(16).padStart(2, '0') + Number(rawAtqa.at(1)).toString(16).padStart(2, '0');
+        atqa = Number(rawAtqa.at(1)).toString(16).padStart(2, '0') + Number(rawAtqa.at(0)).toString(16).padStart(2, '0');
       } else if (rawAtqa !== undefined) {
         atqa = String(rawAtqa).replace(/[^0-9a-fA-F]/g, '').padStart(4, '0').slice(0, 4);
       }
@@ -409,8 +407,8 @@
       if (blocks.length === 0) {
         const u = uid.padEnd(8, '0').slice(0, 8);
         const bcc = (parseInt(u.slice(0,2),16) ^ parseInt(u.slice(2,4),16) ^ parseInt(u.slice(4,6),16) ^ parseInt(u.slice(6,8),16)).toString(16).padStart(2,'0');
-        const atqaLe = atqa.slice(2, 4) + atqa.slice(0, 2);
-        blocks.push((u + bcc + sak + atqaLe + '0000000000000000').padEnd(32, '0'));
+        // atqa уже в wire-формате '0400', свап не нужен
+        blocks.push((u + bcc + sak + atqa + '0000000000000000').padEnd(32, '0'));
         for (let i = 1; i < 64; i++) {
           blocks.push(i % 4 === 3 ? 'FFFFFFFFFFFFFF078069FFFFFFFFFFFF' : '0'.repeat(32));
         }
@@ -421,6 +419,7 @@
       return { name, uid, atqa: atqa.toUpperCase(), sak: sak.toUpperCase(), tag, blocks };
     });
   }
+
   function selectBatch(batchIdx, scrollToFirst = false) {
     const totalBatches = Math.ceil(allCards.length / 8);
     if (totalBatches === 0) return;
@@ -531,7 +530,8 @@
     btnWrite.disabled = true;
     logEl.textContent = '';
     try {
-      await sendCmd(1001, Uint8Array.of(0));
+      // Режим эмулятора (TAG)
+      await sendCmd(1001, Uint8Array.of(0), true);
 
       for (let i = 0; i < selectedIndices.length; i++) {
         const cardIdx = selectedIndices.at(i);
@@ -542,25 +542,23 @@
         const tagHi = (card.tag >> 8) & 0xff;
         const tagLo = card.tag & 0xff;
 
-        await sendCmd(1004, Uint8Array.of(slot, tagHi, tagLo));
-        await sendCmd(1005, Uint8Array.of(slot, tagHi, tagLo));
-        await sendCmd(1006, Uint8Array.of(slot, 1, 1));
-        await sendCmd(1003, Uint8Array.of(slot));
+        // КРИТИЧНО: сделать слот активным, иначе 4000/4001 пишут в текущий активный слот
+        await sendCmd(1002, Uint8Array.of(slot), true);
 
+        // Установить тип тега слота
+        await sendCmd(1004, Uint8Array.of(slot, tagHi, tagLo), true);
+        // Включить LF и HF (для MIFARE нужен HF)
+        await sendCmd(1005, Uint8Array.of(slot, 1, 1), true);
+
+        // Записать nickname (slot, len, nick_bytes)
         let nickBytes = encodeNickSafe(card.name);
         if (nickBytes.length === 0) nickBytes = new TextEncoder().encode('Slot ' + (i + 1));
         const nickPayload = new Uint8Array(2 + nickBytes.length);
-        nickPayload.set(Uint8Array.of(slot, 1), 0);
+        nickPayload.set(Uint8Array.of(slot, nickBytes.length), 0);
         nickPayload.set(nickBytes, 2);
-        await sendCmd(1007, nickPayload);
+        await sendCmd(1007, nickPayload, true);
 
-        await sendCmd(4015, Uint8Array.of(0));
-        await sendCmd(4004, Uint8Array.of(0));
-        await sendCmd(4017, Uint8Array.of(0));
-        await sendCmd(4011, Uint8Array.of(0));
-        await sendCmd(4013, Uint8Array.of(0));
-
-        // 9 байт для 4001: [uid_len(1)] + [uid(4)] + [atqa(2) = 0004] + [sak(1) = 08] + [ats_len(1) = 00]
+        // Anti-collision данные: uid_len + uid + sak + atqa(2) + ats_len
         const uidB = hexToBytes(card.uid);
         const atqaB = hexToBytes(card.atqa);
         const sakB = hexToBytes(card.sak);
@@ -568,14 +566,18 @@
         let p = 0;
         antiColl.set(Uint8Array.of(uidB.length), p++);
         antiColl.set(uidB, p); p += uidB.length;
+        antiColl.set(Uint8Array.of(sakB.at(0) ?? 0x08), p++);
         antiColl.set(atqaB.slice(0, 2), p); p += 2;
-        antiColl.set(Uint8Array.of(sakB.at(0) ?? 0x08, 0x00), p);
+        antiColl.set(Uint8Array.of(0x00), p);
         await sendCmd(4001, antiColl);
 
-        for (let offset = 0; offset < 64; offset += 16) {
-          const blockBytes = hexToBytes(card.blocks.slice(offset, offset + 16).join(''));
-          const writePayload = new Uint8Array(1 + blockBytes.length);
-          writePayload.set(Uint8Array.of(offset), 0);
+        // Запись 64 блоков ПО ОДНОМУ. Формат 4000: [block_idx(1)] + [data(16)] = 17 байт.
+        for (let blockIdx = 0; blockIdx < 64; blockIdx++) {
+          const blockBytes = hexToBytes(card.blocks[blockIdx] || '');
+          if (blockBytes.length !== 16) continue;
+
+          const writePayload = new Uint8Array(17);
+          writePayload[0] = blockIdx;
           writePayload.set(blockBytes, 1);
           await sendCmd(4000, writePayload);
         }
@@ -583,13 +585,9 @@
         writtenSet.add(cardIdx);
       }
 
-      await sendCmd(1003, Uint8Array.of(0));
-      await sendCmd(1009, null);
-
-      // Читаем реальную конфигурацию слота 1 (команда 4002) для проверки в логе
-      const chk = await sendCmd(4002, null);
-      log('Проверка слота 1: ' + bytesToHex(chk.data));
-
+      // Активировать слот 0 и сохранить настройки
+      await sendCmd(1002, Uint8Array.of(0), true);
+      await sendCmd(1009, null, true);
       await refreshDeviceSlots();
       renderBatches();
       renderCards();
