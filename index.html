@@ -5,46 +5,101 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Chameleon Ultra Batch Loader</title>
 <style>
-  :root { --bg: #121212; --card: #1e1e1e; --accent: #00e676; --danger: #ff5252; --text: #ffffff; --muted: #9e9e9e; }
-  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 165px; }
-  h2 { margin: 0 0 12px 0; font-size: 20px; }
-  .panel { background: var(--card); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
-  button { background: var(--accent); color: #000; border: none; border-radius: 10px; padding: 14px 16px; font-weight: 700; font-size: 16px; width: 100%; cursor: pointer; }
-  button:disabled { background: #424242; color: #888; }
-  button.secondary { background: #2c2c2c; color: #fff; margin-top: 8px; }
+  :root {
+    --bg: #121212; --card: #1e1e1e; --card-alt: #262626; --input-bg: #2c2c2c;
+    --border: #333333; --accent: #00e676; --accent-text: #000000;
+    --selected-bg: #182b20; --danger: #ff5252; --text: #ffffff; --muted: #9e9e9e;
+    --bar-bg: #1a1a1a; --radius: 12px; --btn-radius: 10px; --shadow: none; --blur: none;
+  }
+  /* Светлая тема (День) */
+  body.light {
+    --bg: #f2f4f7; --card: #ffffff; --card-alt: #eef1f5; --input-bg: #e5e8ed;
+    --border: #dcdfe6; --accent: #00b259; --accent-text: #ffffff;
+    --selected-bg: #e6f9ef; --danger: #e53935; --text: #111827; --muted: #6b7280;
+    --bar-bg: #ffffff; --shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  /* Стиль iOS (Тёмный) */
+  body.style-ios {
+    --bg: #000000; --card: rgba(28, 28, 30, 0.85); --card-alt: #2c2c2e; --input-bg: #2c2c2e;
+    --border: rgba(255, 255, 255, 0.12); --accent: #0a84ff; --accent-text: #ffffff;
+    --selected-bg: rgba(10, 132, 255, 0.2); --danger: #ff453a; --text: #ffffff; --muted: #8e8e93;
+    --bar-bg: rgba(28, 28, 30, 0.85); --radius: 16px; --btn-radius: 12px; --blur: blur(16px);
+  }
+  /* Стиль iOS (Светлый) */
+  body.style-ios.light {
+    --bg: #f2f2f7; --card: rgba(255, 255, 255, 0.9); --card-alt: #e5e5ea; --input-bg: #e5e5ea;
+    --border: rgba(0, 0, 0, 0.08); --accent: #007aff; --accent-text: #ffffff;
+    --selected-bg: rgba(0, 122, 255, 0.12); --danger: #ff3b30; --text: #000000; --muted: #8e8e93;
+    --bar-bg: rgba(255, 255, 255, 0.85); --shadow: 0 4px 14px rgba(0,0,0,0.05); --blur: blur(16px);
+  }
+  /* Стиль Кибер / Flipper (Тёмный) */
+  body.style-cyber {
+    --bg: #0d0f12; --card: #151921; --card-alt: #1d232e; --input-bg: #1d232e;
+    --border: #2e3748; --accent: #ff6d00; --accent-text: #000000;
+    --selected-bg: #2b1d12; --danger: #ff3d00; --text: #f3f4f6; --muted: #8b95a5;
+    --bar-bg: #11141a; --radius: 6px; --btn-radius: 6px;
+  }
+  /* Стиль Кибер / Flipper (Светлый) */
+  body.style-cyber.light {
+    --bg: #fff8f2; --card: #ffffff; --card-alt: #ffefe3; --input-bg: #ffe4cf;
+    --border: #ffd0ad; --accent: #ff6d00; --accent-text: #ffffff;
+    --selected-bg: #fff0e5; --danger: #d50000; --text: #1a1a1a; --muted: #6e5d52;
+    --bar-bg: #ffffff; --shadow: 0 2px 8px rgba(255, 109, 0, 0.08);
+  }
+
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 165px; transition: background 0.2s, color 0.2s; }
+  .header-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  h2 { margin: 0; font-size: 19px; }
+  .theme-controls { display: flex; gap: 6px; align-items: center; }
+  .mini-btn { width: auto; padding: 6px 10px; font-size: 12px; font-weight: 600; border-radius: 8px; background: var(--card); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow); }
+  select.mini-btn { appearance: none; -webkit-appearance: none; padding-right: 10px; }
+  .panel { background: var(--card); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; border: 1px solid var(--border); box-shadow: var(--shadow); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
+  button { background: var(--accent); color: var(--accent-text); border: none; border-radius: var(--btn-radius); padding: 14px 16px; font-weight: 700; font-size: 16px; width: 100%; cursor: pointer; transition: opacity 0.15s; }
+  button:disabled { background: var(--input-bg); color: var(--muted); opacity: 0.7; }
+  button.secondary { background: var(--input-bg); color: var(--text); margin-top: 8px; border: 1px solid var(--border); }
   button.danger { background: var(--danger); color: #fff; margin-top: 8px; }
   .btn-row { display: flex; gap: 8px; margin-top: 8px; }
   .btn-row button { margin-top: 0; font-size: 14px; padding: 11px 8px; }
   .batches-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  .batch-btn { width: auto; flex: 1 1 auto; min-width: 64px; padding: 8px 10px; font-size: 13px; border-radius: 8px; background: #2c2c2c; color: #fff; border: 1px solid #3c3c3c; }
-  .batch-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
-  .batch-btn.done { border-color: #00e676; color: #00e676; }
-  .batch-btn.active.done { color: #000; }
-  input[type="file"], input[type="text"] { width: 100%; box-sizing: border-box; background: #2c2c2c; border: 1px solid #3c3c3c; color: #fff; padding: 10px; border-radius: 8px; font-size: 15px; margin-top: 8px; }
+  .batch-btn { width: auto; flex: 1 1 auto; min-width: 64px; padding: 8px 10px; font-size: 13px; border-radius: 8px; background: var(--input-bg); color: var(--text); border: 1px solid var(--border); }
+  .batch-btn.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .batch-btn.done { border-color: var(--accent); color: var(--accent); }
+  .batch-btn.active.done { color: var(--accent-text); }
+  input[type="file"], input[type="text"] { width: 100%; box-sizing: border-box; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; font-size: 15px; margin-top: 8px; }
   .slots-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
-  .slot-pill { background: #262626; padding: 6px 8px; border-radius: 6px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid #333; }
+  .slot-pill { background: var(--card-alt); padding: 6px 8px; border-radius: 6px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid var(--border); }
   .slot-pill span { color: var(--accent); font-weight: 700; margin-right: 4px; }
   .slot-pill.empty { color: var(--muted); }
-  .card-item { display: flex; align-items: center; justify-content: space-between; background: var(--card); padding: 12px; border-radius: 10px; margin-bottom: 8px; border: 2px solid transparent; cursor: pointer; }
-  .card-item.selected { border-color: var(--accent); background: #182b20; }
+  .card-item { display: flex; align-items: center; justify-content: space-between; background: var(--card); padding: 12px; border-radius: var(--radius); margin-bottom: 8px; border: 1.5px solid var(--border); box-shadow: var(--shadow); cursor: pointer; }
+  .card-item.selected { border-color: var(--accent); background: var(--selected-bg); }
   .card-info { flex: 1; padding-right: 10px; }
   .card-name { font-weight: 600; font-size: 16px; }
   .card-uid { font-family: monospace; color: var(--muted); font-size: 13px; margin-top: 3px; }
-  .done-tag { color: #00e676; font-size: 11px; font-weight: 700; margin-left: 6px; }
-  .slot-badge { background: var(--accent); color: #000; font-weight: 800; padding: 4px 10px; border-radius: 6px; font-size: 13px; min-width: 52px; text-align: center; }
-  .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1a1a1a; padding: 12px 16px; border-top: 1px solid #333; z-index: 10; }
-  #log { font-family: monospace; font-size: 12px; color: #00e676; white-space: pre-wrap; max-height: 90px; overflow-y: auto; margin-top: 8px; }
-  #btnTop { position: fixed; right: 16px; bottom: 135px; width: 44px; height: 44px; border-radius: 50%; background: #2c2c2c; color: var(--accent); border: 1px solid var(--accent); font-size: 20px; padding: 0; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.6); z-index: 20; }
+  .done-tag { color: var(--accent); font-size: 11px; font-weight: 700; margin-left: 6px; }
+  .slot-badge { background: var(--accent); color: var(--accent-text); font-weight: 800; padding: 4px 10px; border-radius: 6px; font-size: 13px; min-width: 52px; text-align: center; }
+  .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--bar-bg); padding: 12px 16px; border-top: 1px solid var(--border); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); z-index: 10; }
+  #log { font-family: monospace; font-size: 12px; color: var(--accent); white-space: pre-wrap; max-height: 90px; overflow-y: auto; margin-top: 8px; }
+  #btnTop { position: fixed; right: 16px; bottom: 135px; width: 44px; height: 44px; border-radius: 50%; background: var(--card); color: var(--accent); border: 1.5px solid var(--accent); font-size: 20px; padding: 0; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.35); z-index: 20; }
 </style>
 </head>
 <body>
 
-<h2>Chameleon Ultra Loader</h2>
+<div class="header-bar">
+  <h2>Chameleon Loader</h2>
+  <div class="theme-controls">
+    <select id="styleSelect" class="mini-btn" title="Стиль оформления">
+      <option value="default">Стиль: Стандарт</option>
+      <option value="ios">Стиль: iOS</option>
+      <option value="cyber">Стиль: Кибер</option>
+    </select>
+    <button id="btnTheme" type="button" class="mini-btn">☀️ День</button>
+  </div>
+</div>
 
 <div class="panel">
   <button id="btnConnect" type="button">1. Подключить Chameleon Ultra</button>
   <button id="btnDisconnect" type="button" class="danger" style="display:none;">Отключиться от устройства</button>
-  <div id="status" style="margin-top:8px; font-size:13px; color:#00e676;">Готов к работе</div>
+  <div id="status" style="margin-top:8px; font-size:13px; color:var(--accent);">Готов к работе</div>
   <div id="deviceSlots" class="slots-grid" style="display:none;"></div>
 </div>
 
@@ -88,10 +143,39 @@
   const btnNextBatch = document.getElementById('btnNextBatch');
   const btnClear = document.getElementById('btnClear');
   const btnTop = document.getElementById('btnTop');
+  const btnTheme = document.getElementById('btnTheme');
+  const styleSelect = document.getElementById('styleSelect');
   const actionRow = document.getElementById('actionRow');
   const batchesBar = document.getElementById('batchesBar');
   const searchInput = document.getElementById('searchInput');
   const cardsListEl = document.getElementById('cardsList');
+
+  // Инициализация и переключение темы / стиля
+  let isLight = localStorage.getItem('cu_theme') === 'light';
+  let uiStyle = localStorage.getItem('cu_style') || 'default';
+
+  function applyAppearance() {
+    document.body.classList.remove('light', 'style-ios', 'style-cyber');
+    if (isLight) document.body.classList.add('light');
+    if (uiStyle === 'ios') document.body.classList.add('style-ios');
+    if (uiStyle === 'cyber') document.body.classList.add('style-cyber');
+    btnTheme.textContent = isLight ? '🌙 Ночь' : '☀️ День';
+    styleSelect.value = uiStyle;
+  }
+
+  btnTheme.addEventListener('click', () => {
+    isLight = !isLight;
+    localStorage.setItem('cu_theme', isLight ? 'light' : 'dark');
+    applyAppearance();
+  });
+
+  styleSelect.addEventListener('change', (e) => {
+    uiStyle = e.target.value;
+    localStorage.setItem('cu_style', uiStyle);
+    applyAppearance();
+  });
+
+  applyAppearance();
 
   window.addEventListener('scroll', () => {
     btnTop.style.display = window.scrollY > 220 ? 'flex' : 'none';
@@ -193,7 +277,7 @@
 
   async function refreshDeviceSlots() {
     deviceSlotsEl.style.display = 'grid';
-    deviceSlotsEl.innerHTML = '<div style="grid-column:1/-1;font-size:12px;color:#9e9e9e;">Чтение слотов с устройства...</div>';
+    deviceSlotsEl.innerHTML = '<div style="grid-column:1/-1;font-size:12px;color:var(--muted);">Чтение слотов с устройства...</div>';
     const decoder = new TextDecoder('utf-8', { fatal: false });
     let html = '';
     for (let slot = 0; slot < 8; slot++) {
@@ -223,7 +307,7 @@
     deviceSlotsEl.style.display = 'none';
     deviceSlotsEl.innerHTML = '';
     statusEl.textContent = 'Отключено от устройства';
-    statusEl.style.color = '#9e9e9e';
+    statusEl.style.color = 'var(--muted)';
     updateWriteButton();
   }
 
@@ -237,7 +321,7 @@
   btnConnect.addEventListener('click', async () => {
     try {
       statusEl.textContent = 'Поиск Chameleon Ultra...';
-      statusEl.style.color = '#fff';
+      statusEl.style.color = 'var(--text)';
       bleDevice = await navigator.bluetooth.requestDevice({
         filters: [{ services: [NUS_SERVICE] }],
         optionalServices: [NUS_SERVICE]
@@ -253,14 +337,14 @@
 
       const verResp = await sendCmd(1000, null, true);
       statusEl.textContent = 'Подключено! Прошивка: v' + verResp.data.at(0) + '.' + verResp.data.at(1);
-      statusEl.style.color = '#00e676';
+      statusEl.style.color = 'var(--accent)';
       btnConnect.style.display = 'none';
       btnDisconnect.style.display = 'block';
       await refreshDeviceSlots();
       updateWriteButton();
     } catch (e) {
       statusEl.textContent = 'Ошибка: ' + e.message;
-      statusEl.style.color = '#ff5252';
+      statusEl.style.color = 'var(--danger)';
     }
   });
 
