@@ -31,8 +31,9 @@
   .card-uid { font-family: monospace; color: var(--muted); font-size: 13px; margin-top: 3px; }
   .done-tag { color: #00e676; font-size: 11px; font-weight: 700; margin-left: 6px; }
   .slot-badge { background: var(--accent); color: #000; font-weight: 800; padding: 4px 10px; border-radius: 6px; font-size: 13px; min-width: 52px; text-align: center; }
-  .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1a1a1a; padding: 12px 16px; border-top: 1px solid #333; }
+  .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1a1a1a; padding: 12px 16px; border-top: 1px solid #333; z-index: 10; }
   #log { font-family: monospace; font-size: 12px; color: #00e676; white-space: pre-wrap; max-height: 90px; overflow-y: auto; margin-top: 8px; }
+  #btnTop { position: fixed; right: 16px; bottom: 135px; width: 44px; height: 44px; border-radius: 50%; background: #2c2c2c; color: var(--accent); border: 1px solid var(--accent); font-size: 20px; padding: 0; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.6); z-index: 20; }
 </style>
 </head>
 <body>
@@ -58,6 +59,8 @@
 
 <div id="cardsList"></div>
 
+<button id="btnTop" type="button" title="Наверх">↑</button>
+
 <div class="bottom-bar">
   <button id="btnWrite" type="button" disabled>Выберите ключи (0 / 8)</button>
   <div id="log"></div>
@@ -81,10 +84,18 @@
   const btnWrite = document.getElementById('btnWrite');
   const btnNextBatch = document.getElementById('btnNextBatch');
   const btnClear = document.getElementById('btnClear');
+  const btnTop = document.getElementById('btnTop');
   const actionRow = document.getElementById('actionRow');
   const batchesBar = document.getElementById('batchesBar');
   const searchInput = document.getElementById('searchInput');
   const cardsListEl = document.getElementById('cardsList');
+
+  window.addEventListener('scroll', () => {
+    btnTop.style.display = window.scrollY > 220 ? 'flex' : 'none';
+  });
+  btnTop.addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
 
   function log(msg) {
     logEl.textContent += msg + '\n';
@@ -467,6 +478,7 @@
       renderBatches();
       renderCards();
       log('✅ Готово! Нажмите «Следующие» для новой партии.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
       log('❌ Ошибка: ' + e.message);
     } finally {
