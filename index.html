@@ -6,18 +6,30 @@
 <title>Chameleon Ultra Batch Loader</title>
 <style>
   :root { --bg: #121212; --card: #1e1e1e; --accent: #00e676; --text: #ffffff; --muted: #9e9e9e; }
-  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 150px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 165px; }
   h2 { margin: 0 0 12px 0; font-size: 20px; }
   .panel { background: var(--card); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
   button { background: var(--accent); color: #000; border: none; border-radius: 10px; padding: 14px 16px; font-weight: 700; font-size: 16px; width: 100%; cursor: pointer; }
   button:disabled { background: #424242; color: #888; }
   button.secondary { background: #2c2c2c; color: #fff; margin-top: 8px; }
+  .btn-row { display: flex; gap: 8px; margin-top: 8px; }
+  .btn-row button { margin-top: 0; font-size: 14px; padding: 11px 8px; }
+  .batches-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .batch-btn { width: auto; flex: 1 1 auto; min-width: 64px; padding: 8px 10px; font-size: 13px; border-radius: 8px; background: #2c2c2c; color: #fff; border: 1px solid #3c3c3c; }
+  .batch-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+  .batch-btn.done { border-color: #00e676; color: #00e676; }
+  .batch-btn.active.done { color: #000; }
   input[type="file"], input[type="text"] { width: 100%; box-sizing: border-box; background: #2c2c2c; border: 1px solid #3c3c3c; color: #fff; padding: 10px; border-radius: 8px; font-size: 15px; margin-top: 8px; }
-  .card-item { display: flex; align-items: center; justify-content: space-between; background: var(--card); padding: 12px; border-radius: 10px; margin-bottom: 8px; border: 2px solid transparent; }
+  .slots-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
+  .slot-pill { background: #262626; padding: 6px 8px; border-radius: 6px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid #333; }
+  .slot-pill span { color: var(--accent); font-weight: 700; margin-right: 4px; }
+  .slot-pill.empty { color: var(--muted); }
+  .card-item { display: flex; align-items: center; justify-content: space-between; background: var(--card); padding: 12px; border-radius: 10px; margin-bottom: 8px; border: 2px solid transparent; cursor: pointer; }
   .card-item.selected { border-color: var(--accent); background: #182b20; }
   .card-info { flex: 1; padding-right: 10px; }
   .card-name { font-weight: 600; font-size: 16px; }
   .card-uid { font-family: monospace; color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .done-tag { color: #00e676; font-size: 11px; font-weight: 700; margin-left: 6px; }
   .slot-badge { background: var(--accent); color: #000; font-weight: 800; padding: 4px 10px; border-radius: 6px; font-size: 13px; min-width: 52px; text-align: center; }
   .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1a1a1a; padding: 12px 16px; border-top: 1px solid #333; }
   #log { font-family: monospace; font-size: 12px; color: #00e676; white-space: pre-wrap; max-height: 90px; overflow-y: auto; margin-top: 8px; }
@@ -30,13 +42,18 @@
 <div class="panel">
   <button id="btnConnect" type="button">1. Подключить Chameleon Ultra</button>
   <div id="status" style="margin-top:8px; font-size:13px; color:#00e676;">Готов к работе</div>
+  <div id="deviceSlots" class="slots-grid" style="display:none;"></div>
 </div>
 
 <div class="panel">
   <div style="font-size:14px; font-weight:600;">2. Выберите JSON-файл с ключами</div>
   <input type="file" id="fileInput" accept=".json,application/json">
   <input type="text" id="searchInput" placeholder="Поиск по названию или UID..." style="display:none;">
-  <button id="btnClear" type="button" class="secondary" style="display:none;">Снять выделение (0/8)</button>
+  <div id="batchesBar" class="batches-bar" style="display:none;"></div>
+  <div id="actionRow" class="btn-row" style="display:none;">
+    <button id="btnNextBatch" type="button" class="secondary">Следующие 8 →</button>
+    <button id="btnClear" type="button" class="secondary">Снять (0/8)</button>
+  </div>
 </div>
 
 <div id="cardsList"></div>
@@ -54,13 +71,18 @@
   let bleDevice = null, txChar = null, rxChar = null;
   let rxBuffer = new Uint8Array(0);
   let pendingResolver = null;
-  let allCards = [], selectedIndices = [];
+  let allCards = [], selectedIndices = [], writtenSet = new Set();
+  let currentBatch = 0;
 
   const logEl = document.getElementById('log');
   const statusEl = document.getElementById('status');
+  const deviceSlotsEl = document.getElementById('deviceSlots');
   const btnConnect = document.getElementById('btnConnect');
   const btnWrite = document.getElementById('btnWrite');
+  const btnNextBatch = document.getElementById('btnNextBatch');
   const btnClear = document.getElementById('btnClear');
+  const actionRow = document.getElementById('actionRow');
+  const batchesBar = document.getElementById('batchesBar');
   const searchInput = document.getElementById('searchInput');
   const cardsListEl = document.getElementById('cardsList');
 
@@ -124,18 +146,42 @@
       }
     }
   }
-
-  async function sendCmd(cmd, dataBytes) {
+  async function sendCmd(cmd, dataBytes, allowNonZeroStatus = false) {
     if (!txChar) throw new Error('Нет подключения');
     const frame = buildFrame(cmd, dataBytes);
     const respPromise = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { pendingResolver = null; reject(new Error('Таймаут ' + cmd)); }, 5000);
+      const timer = setTimeout(() => { pendingResolver = null; reject(new Error('Таймаут команды ' + cmd)); }, 5000);
       pendingResolver = { cmd, resolve: (res) => { clearTimeout(timer); resolve(res); } };
     });
     for (let i = 0; i < frame.length; i += 20) {
       await txChar.writeValueWithoutResponse(frame.slice(i, i + 20));
     }
-    return await respPromise;
+    const res = await respPromise;
+    if (!allowNonZeroStatus && res.status !== 0 && res.status !== 0x0068) {
+      throw new Error('Команда ' + cmd + ' вернула ошибку 0x' + res.status.toString(16));
+    }
+    return res;
+  }
+
+  async function refreshDeviceSlots() {
+    deviceSlotsEl.style.display = 'grid';
+    deviceSlotsEl.innerHTML = '<div style="grid-column:1/-1;font-size:12px;color:#9e9e9e;">Чтение слотов с устройства...</div>';
+    const decoder = new TextDecoder();
+    let html = '';
+    for (let slot = 0; slot < 8; slot++) {
+      try {
+        const resp = await sendCmd(1008, Uint8Array.of(slot, 2), true);
+        const nick = (resp.status === 0 && resp.data.length > 0) ? decoder.decode(resp.data).replace(/\0/g, '').trim() : '';
+        if (nick) {
+          html += '<div class="slot-pill" title="' + nick + '"><span>' + (slot + 1) + ':</span>' + nick + '</div>';
+        } else {
+          html += '<div class="slot-pill empty"><span>' + (slot + 1) + ':</span>пусто</div>';
+        }
+      } catch (e) {
+        html += '<div class="slot-pill empty"><span>' + (slot + 1) + ':</span>—</div>';
+      }
+    }
+    deviceSlotsEl.innerHTML = html;
   }
 
   btnConnect.addEventListener('click', async () => {
@@ -154,15 +200,17 @@
       await rxChar.startNotifications();
       rxChar.addEventListener('characteristicvaluechanged', handleNotifications);
 
-      const verResp = await sendCmd(1000);
+      const verResp = await sendCmd(1000, null, true);
       statusEl.textContent = 'Подключено! Прошивка: v' + verResp.data.at(0) + '.' + verResp.data.at(1);
       statusEl.style.color = '#00e676';
+      await refreshDeviceSlots();
       updateWriteButton();
     } catch (e) {
       statusEl.textContent = 'Ошибка: ' + e.message;
       statusEl.style.color = '#ff5252';
     }
   });
+
   function parseJsonCards(raw) {
     let items = [];
     if (Array.isArray(raw)) items = raw;
@@ -170,40 +218,107 @@
       if (Array.isArray(raw.cards)) items = raw.cards;
       else if (Array.isArray(raw.data)) items = raw.data;
       else if (Array.isArray(raw.keys)) items = raw.keys;
-      else if (raw.Card || raw.blocks) items = Array.of(raw);
+      else if (raw.Card || raw.blocks || raw.data) items = Array.of(raw);
       else items = Object.entries(raw).map(([k, v]) => Object.assign({ name: k }, typeof v === 'object' ? v : { uid: v }));
     }
 
     return items.map((item, idx) => {
       const name = item.name || item.nick || item.title || item.label || ('Ключ #' + (idx + 1));
-      let uid = String(item.uid || item.UID || (item.Card && item.Card.UID) || '').replace(/[^0-9a-fA-F]/g, '');
-      let atqa = String(item.atqa || item.ATQA || (item.Card && item.Card.ATQA) || '0400').replace(/[^0-9a-fA-F]/g, '').padEnd(4, '0').slice(0, 4);
-      let sak = String(item.sak || item.SAK || (item.Card && item.Card.SAK) || '08').replace(/[^0-9a-fA-F]/g, '').padEnd(2, '0').slice(0, 2);
+      let uid = String(item.uid || item.UID || (item.Card && item.Card.UID) || '').replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+
+      let atqa = '0400';
+      const rawAtqa = item.atqa ?? item.ATQA ?? (item.Card && item.Card.ATQA);
+      if (Array.isArray(rawAtqa) && rawAtqa.length >= 2) {
+        atqa = Number(rawAtqa.at(1)).toString(16).padStart(2, '0') + Number(rawAtqa.at(0)).toString(16).padStart(2, '0');
+      } else if (rawAtqa !== undefined) {
+        atqa = String(rawAtqa).replace(/[^0-9a-fA-F]/g, '').padStart(4, '0').slice(0, 4);
+      }
+
+      let sak = '08';
+      const rawSak = item.sak ?? item.SAK ?? (item.Card && item.Card.SAK);
+      if (typeof rawSak === 'number') {
+        sak = rawSak.toString(16).padStart(2, '0');
+      } else if (rawSak !== undefined) {
+        sak = String(rawSak).replace(/[^0-9a-fA-F]/g, '').padStart(2, '0').slice(-2);
+      }
 
       let blocks = [];
-      const rawBlocks = item.blocks || item.dump || item.sectors;
+      const rawBlocks = item.data || item.blocks || item.dump || item.sectors;
       if (Array.isArray(rawBlocks)) {
-        blocks = rawBlocks.map(b => String(b).replace(/[^0-9a-fA-F]/g, '').padEnd(32, '0').slice(0, 32));
+        for (let i = 0; i < 64; i++) {
+          const b = rawBlocks.at(i);
+          if (Array.isArray(b) && b.length === 16) {
+            blocks.push(b.map(byte => Number(byte).toString(16).padStart(2, '0')).join(''));
+          } else if (typeof b === 'string' && b.length > 0) {
+            blocks.push(b.replace(/[^0-9a-fA-F]/g, '').padEnd(32, '0').slice(0, 32));
+          } else {
+            blocks.push(i % 4 === 3 ? 'FFFFFFFFFFFFFF078069FFFFFFFFFFFF' : '0'.repeat(32));
+          }
+        }
       } else if (rawBlocks && typeof rawBlocks === 'object') {
         for (let i = 0; i < 64; i++) {
-          const b = rawBlocks[i] || rawBlocks[String(i)] || '0'.repeat(32);
-          blocks.push(String(b).replace(/[^0-9a-fA-F]/g, '').padEnd(32, '0').slice(0, 32));
+          const b = rawBlocks[i] || rawBlocks[String(i)];
+          if (b) {
+            blocks.push(String(b).replace(/[^0-9a-fA-F]/g, '').padEnd(32, '0').slice(0, 32));
+          } else {
+            blocks.push(i % 4 === 3 ? 'FFFFFFFFFFFFFF078069FFFFFFFFFFFF' : '0'.repeat(32));
+          }
         }
       }
 
-      if (!uid && blocks.length > 0) uid = blocks.at(0).slice(0, 8);
+      if (!uid && blocks.length > 0 && blocks.at(0) !== '0'.repeat(32)) {
+        uid = blocks.at(0).slice(0, 8);
+      }
       if (!uid) uid = '11223344';
 
       if (blocks.length === 0) {
         const u = uid.padEnd(8, '0').slice(0, 8);
         const bcc = (parseInt(u.slice(0,2),16) ^ parseInt(u.slice(2,4),16) ^ parseInt(u.slice(4,6),16) ^ parseInt(u.slice(6,8),16)).toString(16).padStart(2,'0');
         blocks.push((u + bcc + sak + atqa + '0000000000000000').padEnd(32, '0'));
-        for (let i = 1; i < 64; i++) blocks.push(i % 4 === 3 ? 'FFFFFFFFFFFFFF078069FFFFFFFFFFFF' : '0'.repeat(32));
+        for (let i = 1; i < 64; i++) {
+          blocks.push(i % 4 === 3 ? 'FFFFFFFFFFFFFF078069FFFFFFFFFFFF' : '0'.repeat(32));
+        }
       }
-      while (blocks.length < 64) blocks.push('0'.repeat(32));
 
-      return { name: String(name), uid: uid.toUpperCase(), atqa, sak, blocks };
+      const tag = Number(item.tag) || 1001;
+
+      return { name: String(name), uid, atqa: atqa.toUpperCase(), sak: sak.toUpperCase(), tag, blocks };
     });
+  }
+  function selectBatch(batchIdx, scrollToFirst = false) {
+    const totalBatches = Math.ceil(allCards.length / 8);
+    if (totalBatches === 0) return;
+    currentBatch = batchIdx % totalBatches;
+    selectedIndices = [];
+    const start = currentBatch * 8;
+    const end = Math.min(start + 8, allCards.length);
+    for (let i = start; i < end; i++) selectedIndices.push(i);
+    renderBatches();
+    renderCards();
+    updateWriteButton();
+    if (scrollToFirst) {
+      const firstSelected = cardsListEl.querySelector('.card-item.selected');
+      if (firstSelected) firstSelected.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  function renderBatches() {
+    const totalBatches = Math.ceil(allCards.length / 8);
+    batchesBar.innerHTML = '';
+    for (let b = 0; b < totalBatches; b++) {
+      const start = b * 8 + 1;
+      const end = Math.min((b + 1) * 8, allCards.length);
+      let allWritten = true;
+      for (let i = b * 8; i < end; i++) {
+        if (!writtenSet.has(i)) { allWritten = false; break; }
+      }
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'batch-btn' + (b === currentBatch ? ' active' : '') + (allWritten ? ' done' : '');
+      btn.textContent = (allWritten ? '✓ ' : '') + start + '–' + end;
+      btn.addEventListener('click', () => selectBatch(b, true));
+      batchesBar.appendChild(btn);
+    }
   }
 
   document.getElementById('fileInput').addEventListener('change', (e) => {
@@ -213,12 +328,13 @@
     reader.onload = (ev) => {
       try {
         allCards = parseJsonCards(JSON.parse(ev.target.result));
-        selectedIndices = [];
+        writtenSet.clear();
         searchInput.style.display = 'block';
-        btnClear.style.display = 'block';
-        log('Загружено ключей: ' + allCards.length);
-        renderCards();
-        updateWriteButton();
+        batchesBar.style.display = 'flex';
+        actionRow.style.display = 'flex';
+        logEl.textContent = '';
+        log('Загружено ключей: ' + allCards.length + ' (партий: ' + Math.ceil(allCards.length / 8) + ')');
+        selectBatch(0, false);
       } catch (err) {
         alert('Ошибка JSON: ' + err.message);
       }
@@ -227,6 +343,11 @@
   });
 
   searchInput.addEventListener('input', () => renderCards());
+
+  btnNextBatch.addEventListener('click', () => {
+    selectBatch(currentBatch + 1, true);
+  });
+
   btnClear.addEventListener('click', () => { selectedIndices = []; renderCards(); updateWriteButton(); });
 
   function toggleCard(idx) {
@@ -249,7 +370,8 @@
       const div = document.createElement('div');
       div.className = 'card-item' + (slotPos !== -1 ? ' selected' : '');
       const badge = slotPos !== -1 ? '<div class="slot-badge">Слот ' + (slotPos + 1) + '</div>' : '';
-      div.innerHTML = '<div class="card-info"><div class="card-name">' + card.name + '</div><div class="card-uid">UID: ' + card.uid + '</div></div>' + badge;
+      const doneTag = writtenSet.has(idx) ? '<span class="done-tag">✓ записано</span>' : '';
+      div.innerHTML = '<div class="card-info"><div class="card-name">' + (idx + 1) + '. ' + card.name + doneTag + '</div><div class="card-uid">UID: ' + card.uid + ' | SAK: ' + card.sak + ' | ATQA: ' + card.atqa + '</div></div>' + badge;
       div.addEventListener('click', () => toggleCard(idx));
       cardsListEl.appendChild(div);
     });
@@ -257,7 +379,14 @@
 
   function updateWriteButton() {
     const count = selectedIndices.length;
-    btnClear.textContent = 'Снять выделение (' + count + '/8)';
+    const totalBatches = Math.ceil(allCards.length / 8);
+    btnClear.textContent = 'Снять (' + count + '/8)';
+    if (totalBatches > 1) {
+      const nextB = (currentBatch + 1) % totalBatches;
+      const nextStart = nextB * 8 + 1;
+      const nextEnd = Math.min((nextB + 1) * 8, allCards.length);
+      btnNextBatch.textContent = 'Следующие (' + nextStart + '–' + nextEnd + ') →';
+    }
     btnWrite.textContent = count > 0 ? 'Записать в слоты 1–' + count : 'Выберите ключи (0 / 8)';
     btnWrite.disabled = !(bleDevice && bleDevice.gatt && bleDevice.gatt.connected && count > 0);
   }
@@ -266,13 +395,19 @@
     btnWrite.disabled = true;
     logEl.textContent = '';
     try {
-      await sendCmd(1001, Uint8Array.of(0));
+      await sendCmd(1001, Uint8Array.of(0), true);
+
       for (let i = 0; i < selectedIndices.length; i++) {
-        const card = allCards.at(selectedIndices.at(i));
+        const cardIdx = selectedIndices.at(i);
+        const card = allCards.at(cardIdx);
         const slot = i;
         log('[Слот ' + (i + 1) + '] ' + card.name + ' (' + card.uid + ')...');
-        await sendCmd(1004, Uint8Array.of(slot, 0x03, 0xe9));
-        await sendCmd(1005, Uint8Array.of(slot, 0x03, 0xe9));
+
+        const tagHi = (card.tag >> 8) & 0xff;
+        const tagLo = card.tag & 0xff;
+
+        await sendCmd(1004, Uint8Array.of(slot, tagHi, tagLo));
+        await sendCmd(1005, Uint8Array.of(slot, tagHi, tagLo), true);
         await sendCmd(1006, Uint8Array.of(slot, 2, 1));
         await sendCmd(1003, Uint8Array.of(slot));
 
@@ -283,11 +418,11 @@
         nickPayload.set(nickBytes, 2);
         await sendCmd(1007, nickPayload);
 
-        await sendCmd(4015, Uint8Array.of(0));
-        await sendCmd(4004, Uint8Array.of(0));
-        await sendCmd(4017, Uint8Array.of(0));
-        await sendCmd(4011, Uint8Array.of(0));
-        await sendCmd(4013, Uint8Array.of(0));
+        await sendCmd(4015, Uint8Array.of(0), true);
+        await sendCmd(4004, Uint8Array.of(0), true);
+        await sendCmd(4017, Uint8Array.of(0), true);
+        await sendCmd(4011, Uint8Array.of(0), true);
+        await sendCmd(4013, Uint8Array.of(0), true);
 
         const uidB = hexToBytes(card.uid);
         const atqaB = hexToBytes(card.atqa);
@@ -297,7 +432,7 @@
         antiColl.set(Uint8Array.of(uidB.length), p++);
         antiColl.set(uidB, p); p += uidB.length;
         antiColl.set(atqaB.slice(0, 2), p); p += 2;
-        antiColl.set(Uint8Array.of(sakB.at(0) || 0x08, 0), p);
+        antiColl.set(Uint8Array.of(sakB.at(0) ?? 0x08, 0x00), p);
         await sendCmd(4001, antiColl);
 
         for (let offset = 0; offset < 64; offset += 16) {
@@ -307,10 +442,16 @@
           writePayload.set(blockBytes, 1);
           await sendCmd(4000, writePayload);
         }
+
+        writtenSet.add(cardIdx);
       }
+
       await sendCmd(1003, Uint8Array.of(0));
       await sendCmd(1009);
-      log('✅ Готово! Сохранено в память.');
+      await refreshDeviceSlots();
+      renderBatches();
+      renderCards();
+      log('✅ Готово! Нажмите «Следующие» для новой партии.');
     } catch (e) {
       log('❌ Ошибка: ' + e.message);
     } finally {
