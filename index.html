@@ -184,16 +184,13 @@
     let html = '';
     for (let slot = 0; slot < 8; slot++) {
       try {
-        const resp = await sendCmd(1008, Uint8Array.of(slot, 2), true);
-        if (resp.status === 0 && resp.data.length > 0) {
-          const nick = decoder.decode(resp.data).replace(/\0/g, '').trim();
-          if (nick) {
-            html += '<div class="slot-pill" title="' + nick + '"><span>' + (slot + 1) + ':</span>' + nick + '</div>';
-          } else {
-            html += '<div class="slot-pill empty"><span>' + (slot + 1) + ':</span>пусто</div>';
-          }
+        const resp = await sendCmd(1008, Uint8Array.of(slot, 1), true);
+        const isOk = (resp.status === 0 || resp.status === 0x0068);
+        const nick = (isOk && resp.data.length > 0) ? decoder.decode(resp.data).replace(/\0/g, '').trim() : '';
+        if (nick) {
+          html += '<div class="slot-pill" title="' + nick + '"><span>' + (slot + 1) + ':</span>' + nick + '</div>';
         } else {
-          html += '<div class="slot-pill empty"><span>' + (slot + 1) + ':</span>пусто (0x' + resp.status.toString(16) + ')</div>';
+          html += '<div class="slot-pill empty"><span>' + (slot + 1) + ':</span>пусто</div>';
         }
       } catch (e) {
         html += '<div class="slot-pill empty"><span>' + (slot + 1) + ':</span>ошибка</div>';
@@ -426,13 +423,13 @@
 
         await sendCmd(1004, Uint8Array.of(slot, tagHi, tagLo));
         await sendCmd(1005, Uint8Array.of(slot, tagHi, tagLo), true);
-        await sendCmd(1006, Uint8Array.of(slot, 2, 1));
+        await sendCmd(1006, Uint8Array.of(slot, 1, 1));
         await sendCmd(1003, Uint8Array.of(slot));
 
         let nickBytes = encodeNickSafe(card.name);
         if (nickBytes.length === 0) nickBytes = new TextEncoder().encode('Slot ' + (i + 1));
         const nickPayload = new Uint8Array(2 + nickBytes.length);
-        nickPayload.set(Uint8Array.of(slot, 2), 0);
+        nickPayload.set(Uint8Array.of(slot, 1), 0);
         nickPayload.set(nickBytes, 2);
         await sendCmd(1007, nickPayload);
 
