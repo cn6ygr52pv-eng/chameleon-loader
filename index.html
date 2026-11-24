@@ -252,7 +252,8 @@
       }
     }
   }
-  async function sendCmd(cmd, dataBytes, allowSuccess68 = false) {
+
+  async function sendCmd(cmd, dataBytes) {
     if (!txChar) throw new Error('Нет подключения');
     const frame = buildFrame(cmd, dataBytes);
     const respPromise = new Promise((resolve, reject) => {
@@ -263,8 +264,8 @@
       await txChar.writeValueWithoutResponse(frame.slice(i, i + 20));
     }
     const res = await respPromise;
-    const isOk = res.status === 0 || (allowSuccess68 && res.status === 0x0068);
-    if (!isOk) {
+    // В прошивке v2.3: 0x0000 (HF_TAG_OK) и 0x0068 (DEVICE_SUCCESS) — оба означают успех
+    if (res.status !== 0 && res.status !== 0x0068) {
       throw new Error('Команда ' + cmd + ' вернула ошибку 0x' + res.status.toString(16));
     }
     return res;
