@@ -278,7 +278,8 @@
     let html = '';
     for (let slot = 0; slot < 8; slot++) {
       try {
-        const resp = await sendCmd(1008, Uint8Array.of(slot), true);
+        // 1008: GET_SLOT_TAG_NICK, формат: [slot_number, sense_type]
+        const resp = await sendCmd(1008, Uint8Array.of(slot, 2), true);
         const nick = (resp.data.length > 0) ? decoder.decode(resp.data).replace(/\0/g, '').trim() : '';
         if (nick) {
           html += '<div class="slot-pill" title="' + nick + '"><span>' + (slot + 1) + ':</span>' + nick + '</div>';
@@ -546,14 +547,14 @@
         // 2. Установить тип тега для слота (1004)
         await sendCmd(1004, Uint8Array.of(slot, tagHi, tagLo), true);
 
-        // 3. Включить HF-эмуляцию (1006)
-        await sendCmd(1006, Uint8Array.of(slot, 1, 1), true);
+        // 3. Включить HF-эмуляцию (1006). sense_type=2 (HF), enable=1
+        await sendCmd(1006, Uint8Array.of(slot, 2, 1), true);
 
-        // 4. Записать nickname (1007)
+        // 4. Записать nickname (1007). Формат: [slot_number, sense_type, ...name]
         let nickBytes = encodeNickSafe(card.name);
         if (nickBytes.length === 0) nickBytes = new TextEncoder().encode('Slot ' + (i + 1));
         const nickPayload = new Uint8Array(2 + nickBytes.length);
-        nickPayload.set(Uint8Array.of(slot, nickBytes.length), 0);
+        nickPayload.set(Uint8Array.of(slot, 2), 0); // sense_type = 2 (HF)
         nickPayload.set(nickBytes, 2);
         await sendCmd(1007, nickPayload, true);
 
@@ -584,7 +585,7 @@
         writtenSet.add(cardIdx);
       }
 
-      // Активировать слот 0 (1003) и сохранить настройки (1009)
+      // Активировать слот 0 и сохранить настройки
       await sendCmd(1003, Uint8Array.of(0), true);
       await sendCmd(1009, null, true);
       await refreshDeviceSlots();
