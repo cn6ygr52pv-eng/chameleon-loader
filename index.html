@@ -252,7 +252,7 @@
       }
     }
   }
-  async function sendCmd(cmd, dataBytes, allowNonZeroStatus = false) {
+  async function sendCmd(cmd, dataBytes, allowSuccess68 = false) {
     if (!txChar) throw new Error('Нет подключения');
     const frame = buildFrame(cmd, dataBytes);
     const respPromise = new Promise((resolve, reject) => {
@@ -263,7 +263,8 @@
       await txChar.writeValueWithoutResponse(frame.slice(i, i + 20));
     }
     const res = await respPromise;
-    if (!allowNonZeroStatus && res.status !== 0 && res.status !== 0x0068) {
+    const isOk = res.status === 0 || (allowSuccess68 && res.status === 0x0068);
+    if (!isOk) {
       throw new Error('Команда ' + cmd + ' вернула ошибку 0x' + res.status.toString(16));
     }
     return res;
@@ -277,8 +278,7 @@
     for (let slot = 0; slot < 8; slot++) {
       try {
         const resp = await sendCmd(1008, Uint8Array.of(slot, 1), true);
-        const isOk = (resp.status === 0 || resp.status === 0x0068);
-        const nick = (isOk && resp.data.length > 0) ? decoder.decode(resp.data).replace(/\0/g, '').trim() : '';
+        const nick = (resp.data.length > 0) ? decoder.decode(resp.data).replace(/\0/g, '').trim() : '';
         if (nick) {
           html += '<div class="slot-pill" title="' + nick + '"><span>' + (slot + 1) + ':</span>' + nick + '</div>';
         } else {
@@ -357,7 +357,7 @@
       const name = String(item.name || item.nick || item.title || item.label || ('Ключ #' + (idx + 1))).trim();
       let uid = String(item.uid || item.UID || (item.Card && item.Card.UID) || '').replace(/[^0-9a-fA-F]/g, '').toUpperCase();
 
-      // Прямой порядок ATQA из JSON (например -> '0004') для команды 4001
+      // В JSON atqa: , что соответствует 0x0004 (big-endian)
       let atqa = '0004';
       const rawAtqa = item.atqa ?? item.ATQA ?? (item.Card && item.Card.ATQA);
       if (Array.isArray(rawAtqa) && rawAtqa.length >= 2) {
@@ -539,28 +539,28 @@
         const tagHi = (card.tag >> 8) & 0xff;
         const tagLo = card.tag & 0xff;
 
-        await sendCmd(1004, Uint8Array.of(slot, tagHi, tagLo));
+        await sendCmd(1004, Uint8Array.of(slot, tagHi, tagLo), true);
         await sendCmd(1005, Uint8Array.of(slot, tagHi, tagLo), true);
-        await sendCmd(1006, Uint8Array.of(slot, 1, 1));
-        await sendCmd(1003, Uint8Array.of(slot));
+        await sendCmd(1006, Uint8Array.of(slot, 1, 1), true);
+        await sendCmd(1003, Uint8Array.of(slot), true);
 
         let nickBytes = encodeNickSafe(card.name);
         if (nickBytes.length === 0) nickBytes = new TextEncoder().encode('Slot ' + (i + 1));
         const nickPayload = new Uint8Array(2 + nickBytes.length);
         nickPayload.set(Uint8Array.of(slot, 1), 0);
         nickPayload.set(nickBytes, 2);
-        await sendCmd(1007, nickPayload);
+        await sendCmd(1007, nickPayload, true);
 
-        await sendCmd(4015, Uint8Array.of(0), true);
-        await sendCmd(4004, Uint8Array.of(0), true);
-        await sendCmd(4017, Uint8Array.of(0), true);
-        await sendCmd(4011, Uint8Array.of(0), true);
-        await sendCmd(4013, Uint8Array.of(0), true);
+        await sendCmd(4015, Uint8Array.of(0));
+        await sendCmd(4004, Uint8Array.of(0));
+        await sendCmd(4017, Uint8Array.of(0));
+        await sendCmd(4011, Uint8Array.of(0));
+        await sendCmd(4013, Uint8Array.of(0));
 
-                const uidB = hexToBytes(card.uid);
+        // Точный 8-байтный пакет для 4001: [len(1)] + [uid(4)] + [atqa(2)] + [sak(1)]
+        const uidB = hexToBytes(card.uid);
         const atqaB = hexToBytes(card.atqa);
         const sakB = hexToBytes(card.sak);
-        // Ровно 8 байт для 4-байтного UID: [len(1)] + [uid(4)] + [atqa(2)] + [sak(1)]
         const antiColl = new Uint8Array(1 + uidB.length + 3);
         let p = 0;
         antiColl.set(Uint8Array.of(uidB.length), p++);
@@ -568,7 +568,6 @@
         antiColl.set(atqaB.slice(0, 2), p); p += 2;
         antiColl.set(Uint8Array.of(sakB.at(0) ?? 0x08), p);
         await sendCmd(4001, antiColl);
-
 
         for (let offset = 0; offset < 64; offset += 16) {
           const blockBytes = hexToBytes(card.blocks.slice(offset, offset + 16).join(''));
@@ -581,8 +580,8 @@
         writtenSet.add(cardIdx);
       }
 
-      await sendCmd(1003, Uint8Array.of(0));
-      await sendCmd(1009);
+      await sendCmd(1003, Uint8Array.of(0), true);
+      await sendCmd(1009, null, true);
       await refreshDeviceSlots();
       renderBatches();
       renderCards();
