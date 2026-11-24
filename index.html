@@ -558,17 +558,18 @@
         await sendCmd(4011, Uint8Array.of(0));
         await sendCmd(4013, Uint8Array.of(0));
 
-        // Точный 8-байтный пакет для 4001: [len(1)] + [uid(4)] + [atqa(2)] + [sak(1)]
+             // Точный 9-байтный пакет для прошивки v2.3: [uid_len(1)] + [uid(4)] + [atqa(2)] + [sak(1)] + [ats_len(1)=0]
         const uidB = hexToBytes(card.uid);
         const atqaB = hexToBytes(card.atqa);
         const sakB = hexToBytes(card.sak);
-        const antiColl = new Uint8Array(1 + uidB.length + 3);
+        const antiColl = new Uint8Array(1 + uidB.length + 4);
         let p = 0;
         antiColl.set(Uint8Array.of(uidB.length), p++);
         antiColl.set(uidB, p); p += uidB.length;
         antiColl.set(atqaB.slice(0, 2), p); p += 2;
-        antiColl.set(Uint8Array.of(sakB.at(0) ?? 0x08), p);
+        antiColl.set(Uint8Array.of(sakB.at(0) ?? 0x08, 0x00), p);
         await sendCmd(4001, antiColl);
+
 
         for (let offset = 0; offset < 64; offset += 16) {
           const blockBytes = hexToBytes(card.blocks.slice(offset, offset + 16).join(''));
