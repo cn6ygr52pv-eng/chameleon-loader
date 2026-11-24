@@ -11,35 +11,30 @@
     --selected-bg: #182b20; --danger: #ff5252; --text: #ffffff; --muted: #9e9e9e;
     --bar-bg: #1a1a1a; --radius: 12px; --btn-radius: 10px; --shadow: none; --blur: none;
   }
-  /* Светлая тема (День) */
   body.light {
     --bg: #f2f4f7; --card: #ffffff; --card-alt: #eef1f5; --input-bg: #e5e8ed;
     --border: #dcdfe6; --accent: #00b259; --accent-text: #ffffff;
     --selected-bg: #e6f9ef; --danger: #e53935; --text: #111827; --muted: #6b7280;
     --bar-bg: #ffffff; --shadow: 0 2px 8px rgba(0,0,0,0.06);
   }
-  /* Стиль iOS (Тёмный) */
   body.style-ios {
     --bg: #000000; --card: rgba(28, 28, 30, 0.85); --card-alt: #2c2c2e; --input-bg: #2c2c2e;
     --border: rgba(255, 255, 255, 0.12); --accent: #0a84ff; --accent-text: #ffffff;
     --selected-bg: rgba(10, 132, 255, 0.2); --danger: #ff453a; --text: #ffffff; --muted: #8e8e93;
     --bar-bg: rgba(28, 28, 30, 0.85); --radius: 16px; --btn-radius: 12px; --blur: blur(16px);
   }
-  /* Стиль iOS (Светлый) */
   body.style-ios.light {
     --bg: #f2f2f7; --card: rgba(255, 255, 255, 0.9); --card-alt: #e5e5ea; --input-bg: #e5e5ea;
     --border: rgba(0, 0, 0, 0.08); --accent: #007aff; --accent-text: #ffffff;
     --selected-bg: rgba(0, 122, 255, 0.12); --danger: #ff3b30; --text: #000000; --muted: #8e8e93;
     --bar-bg: rgba(255, 255, 255, 0.85); --shadow: 0 4px 14px rgba(0,0,0,0.05); --blur: blur(16px);
   }
-  /* Стиль Кибер / Flipper (Тёмный) */
   body.style-cyber {
     --bg: #0d0f12; --card: #151921; --card-alt: #1d232e; --input-bg: #1d232e;
     --border: #2e3748; --accent: #ff6d00; --accent-text: #000000;
     --selected-bg: #2b1d12; --danger: #ff3d00; --text: #f3f4f6; --muted: #8b95a5;
     --bar-bg: #11141a; --radius: 6px; --btn-radius: 6px;
   }
-  /* Стиль Кибер / Flipper (Светлый) */
   body.style-cyber.light {
     --bg: #fff8f2; --card: #ffffff; --card-alt: #ffefe3; --input-bg: #ffe4cf;
     --border: #ffd0ad; --accent: #ff6d00; --accent-text: #ffffff;
@@ -150,7 +145,6 @@
   const searchInput = document.getElementById('searchInput');
   const cardsListEl = document.getElementById('cardsList');
 
-  // Инициализация и переключение темы / стиля
   let isLight = localStorage.getItem('cu_theme') === 'light';
   let uiStyle = localStorage.getItem('cu_style') || 'default';
 
@@ -360,13 +354,14 @@
     }
 
     return items.map((item, idx) => {
-      const name = item.name || item.nick || item.title || item.label || ('Ключ #' + (idx + 1));
+      const name = String(item.name || item.nick || item.title || item.label || ('Ключ #' + (idx + 1))).trim();
       let uid = String(item.uid || item.UID || (item.Card && item.Card.UID) || '').replace(/[^0-9a-fA-F]/g, '').toUpperCase();
 
-      let atqa = '0400';
+      // Прямой порядок ATQA из JSON (например -> '0004') для команды 4001
+      let atqa = '0004';
       const rawAtqa = item.atqa ?? item.ATQA ?? (item.Card && item.Card.ATQA);
       if (Array.isArray(rawAtqa) && rawAtqa.length >= 2) {
-        atqa = Number(rawAtqa.at(1)).toString(16).padStart(2, '0') + Number(rawAtqa.at(0)).toString(16).padStart(2, '0');
+        atqa = Number(rawAtqa.at(0)).toString(16).padStart(2, '0') + Number(rawAtqa.at(1)).toString(16).padStart(2, '0');
       } else if (rawAtqa !== undefined) {
         atqa = String(rawAtqa).replace(/[^0-9a-fA-F]/g, '').padStart(4, '0').slice(0, 4);
       }
@@ -411,7 +406,8 @@
       if (blocks.length === 0) {
         const u = uid.padEnd(8, '0').slice(0, 8);
         const bcc = (parseInt(u.slice(0,2),16) ^ parseInt(u.slice(2,4),16) ^ parseInt(u.slice(4,6),16) ^ parseInt(u.slice(6,8),16)).toString(16).padStart(2,'0');
-        blocks.push((u + bcc + sak + atqa + '0000000000000000').padEnd(32, '0'));
+        const atqaLe = atqa.slice(2, 4) + atqa.slice(0, 2);
+        blocks.push((u + bcc + sak + atqaLe + '0000000000000000').padEnd(32, '0'));
         for (let i = 1; i < 64; i++) {
           blocks.push(i % 4 === 3 ? 'FFFFFFFFFFFFFF078069FFFFFFFFFFFF' : '0'.repeat(32));
         }
@@ -419,7 +415,7 @@
 
       const tag = Number(item.tag) || 1001;
 
-      return { name: String(name), uid, atqa: atqa.toUpperCase(), sak: sak.toUpperCase(), tag, blocks };
+      return { name, uid, atqa: atqa.toUpperCase(), sak: sak.toUpperCase(), tag, blocks };
     });
   }
   function selectBatch(batchIdx, scrollToFirst = false) {
