@@ -358,11 +358,11 @@
       const name = String(item.name || item.nick || item.title || item.label || ('Ключ #' + (idx + 1))).trim();
       let uid = String(item.uid || item.UID || (item.Card && item.Card.UID) || '').replace(/[^0-9a-fA-F]/g, '').toUpperCase();
 
-      // В JSON atqa: , что соответствует 0x0004 (big-endian)
-      let atqa = '0004';
+            // В радиоэфире ISO14443A (и в команде 4001) ATQA передаётся в little-endian: -> '0400'
+      let atqa = '0400';
       const rawAtqa = item.atqa ?? item.ATQA ?? (item.Card && item.Card.ATQA);
       if (Array.isArray(rawAtqa) && rawAtqa.length >= 2) {
-        atqa = Number(rawAtqa.at(0)).toString(16).padStart(2, '0') + Number(rawAtqa.at(1)).toString(16).padStart(2, '0');
+        atqa = Number(rawAtqa.at(1)).toString(16).padStart(2, '0') + Number(rawAtqa.at(0)).toString(16).padStart(2, '0');
       } else if (rawAtqa !== undefined) {
         atqa = String(rawAtqa).replace(/[^0-9a-fA-F]/g, '').padStart(4, '0').slice(0, 4);
       }
