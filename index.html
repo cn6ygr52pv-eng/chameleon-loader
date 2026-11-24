@@ -264,7 +264,7 @@
       await txChar.writeValueWithoutResponse(frame.slice(i, i + 20));
     }
     const res = await respPromise;
-    // В прошивке v2.3: 0x0000 (HF_TAG_OK) и 0x0068 (DEVICE_SUCCESS) — оба означают успех
+    // 0x0000 (HF_TAG_OK) и 0x0068 (DEVICE_SUCCESS) — оба означают успех
     if (res.status !== 0 && res.status !== 0x0068) {
       throw new Error('Команда ' + cmd + ' вернула ошибку 0x' + res.status.toString(16));
     }
@@ -278,7 +278,7 @@
     let html = '';
     for (let slot = 0; slot < 8; slot++) {
       try {
-        const resp = await sendCmd(1008, Uint8Array.of(slot, 1), true);
+        const resp = await sendCmd(1008, Uint8Array.of(slot), true);
         const nick = (resp.data.length > 0) ? decoder.decode(resp.data).replace(/\0/g, '').trim() : '';
         if (nick) {
           html += '<div class="slot-pill" title="' + nick + '"><span>' + (slot + 1) + ':</span>' + nick + '</div>';
@@ -358,7 +358,6 @@
       const name = String(item.name || item.nick || item.title || item.label || ('Ключ #' + (idx + 1))).trim();
       let uid = String(item.uid || item.UID || (item.Card && item.Card.UID) || '').replace(/[^0-9a-fA-F]/g, '').toUpperCase();
 
-      // В радиоэфире ISO14443A (и в команде 4001) ATQA передаётся в little-endian: -> '0400'
       let atqa = '0400';
       const rawAtqa = item.atqa ?? item.ATQA ?? (item.Card && item.Card.ATQA);
       if (Array.isArray(rawAtqa) && rawAtqa.length >= 2) {
@@ -407,7 +406,6 @@
       if (blocks.length === 0) {
         const u = uid.padEnd(8, '0').slice(0, 8);
         const bcc = (parseInt(u.slice(0,2),16) ^ parseInt(u.slice(2,4),16) ^ parseInt(u.slice(4,6),16) ^ parseInt(u.slice(6,8),16)).toString(16).padStart(2,'0');
-        // atqa уже в wire-формате '0400', свап не нужен
         blocks.push((u + bcc + sak + atqa + '0000000000000000').padEnd(32, '0'));
         for (let i = 1; i < 64; i++) {
           blocks.push(i % 4 === 3 ? 'FFFFFFFFFFFFFF078069FFFFFFFFFFFF' : '0'.repeat(32));
@@ -542,15 +540,16 @@
         const tagHi = (card.tag >> 8) & 0xff;
         const tagLo = card.tag & 0xff;
 
-        // КРИТИЧНО: сделать слот активным, иначе 4000/4001 пишут в текущий активный слот
-        await sendCmd(1002, Uint8Array.of(slot), true);
+        // 1. Активировать слот (1003)
+        await sendCmd(1003, Uint8Array.of(slot), true);
 
-        // Установить тип тега слота
+        // 2. Установить тип тега для слота (1004)
         await sendCmd(1004, Uint8Array.of(slot, tagHi, tagLo), true);
-        // Включить LF и HF (для MIFARE нужен HF)
-        await sendCmd(1005, Uint8Array.of(slot, 1, 1), true);
 
-        // Записать nickname (slot, len, nick_bytes)
+        // 3. Включить HF-эмуляцию (1006)
+        await sendCmd(1006, Uint8Array.of(slot, 1, 1), true);
+
+        // 4. Записать nickname (1007)
         let nickBytes = encodeNickSafe(card.name);
         if (nickBytes.length === 0) nickBytes = new TextEncoder().encode('Slot ' + (i + 1));
         const nickPayload = new Uint8Array(2 + nickBytes.length);
@@ -558,7 +557,7 @@
         nickPayload.set(nickBytes, 2);
         await sendCmd(1007, nickPayload, true);
 
-        // Anti-collision данные: uid_len + uid + sak + atqa(2) + ats_len
+        // 5. Anti-collision данные (4001)
         const uidB = hexToBytes(card.uid);
         const atqaB = hexToBytes(card.atqa);
         const sakB = hexToBytes(card.sak);
@@ -571,7 +570,7 @@
         antiColl.set(Uint8Array.of(0x00), p);
         await sendCmd(4001, antiColl);
 
-        // Запись 64 блоков ПО ОДНОМУ. Формат 4000: [block_idx(1)] + [data(16)] = 17 байт.
+        // 6. Запись 64 блоков по одному (4000)
         for (let blockIdx = 0; blockIdx < 64; blockIdx++) {
           const blockBytes = hexToBytes(card.blocks[blockIdx] || '');
           if (blockBytes.length !== 16) continue;
@@ -585,8 +584,8 @@
         writtenSet.add(cardIdx);
       }
 
-      // Активировать слот 0 и сохранить настройки
-      await sendCmd(1002, Uint8Array.of(0), true);
+      // Активировать слот 0 (1003) и сохранить настройки (1009)
+      await sendCmd(1003, Uint8Array.of(0), true);
       await sendCmd(1009, null, true);
       await refreshDeviceSlots();
       renderBatches();
