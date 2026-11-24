@@ -558,7 +558,7 @@
         await sendCmd(4011, Uint8Array.of(0));
         await sendCmd(4013, Uint8Array.of(0));
 
-             // Точный 9-байтный пакет для прошивки v2.3: [uid_len(1)] + [uid(4)] + [atqa(2)] + [sak(1)] + [ats_len(1)=0]
+                     // Точный формат 4001 (9 байт): [uid_len(1)] + [uid(4)] + [sak(1)] + [atqa(2)] + [ats_len(1)=0]
         const uidB = hexToBytes(card.uid);
         const atqaB = hexToBytes(card.atqa);
         const sakB = hexToBytes(card.sak);
@@ -566,8 +566,9 @@
         let p = 0;
         antiColl.set(Uint8Array.of(uidB.length), p++);
         antiColl.set(uidB, p); p += uidB.length;
+        antiColl.set(Uint8Array.of(sakB.at(0) ?? 0x08), p++);
         antiColl.set(atqaB.slice(0, 2), p); p += 2;
-        antiColl.set(Uint8Array.of(sakB.at(0) ?? 0x08, 0x00), p);
+        antiColl.set(Uint8Array.of(0x00), p);
         await sendCmd(4001, antiColl);
 
 
