@@ -43,7 +43,7 @@
   }
 
   /* Увеличен padding снизу, чтобы карточки не уходили под плавающую панель */
-  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 260px; transition: background 0.2s, color 0.2s; }
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 280px; transition: background 0.2s, color 0.2s; }
   
   .header-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
   h2 { margin: 0; font-size: 19px; }
@@ -52,23 +52,6 @@
   select.mini-btn { appearance: none; -webkit-appearance: none; padding-right: 10px; }
   
   .panel { background: var(--card); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; border: 1px solid var(--border); box-shadow: var(--shadow); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
-  
-  /* 🚀 Плавающая панель (Поиск + Партии) */
-  #stickyPanel {
-    position: sticky;
-    bottom: 88px; /* Прилипает ровно над кнопкой записи */
-    z-index: 60;
-    background: var(--card);
-    border-radius: var(--radius);
-    padding: 12px;
-    margin-bottom: 14px;
-    border: 1px solid var(--border);
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.15); /* Тень вверх для объема */
-    backdrop-filter: var(--blur);
-    -webkit-backdrop-filter: var(--blur);
-    display: none;
-  }
-  #stickyPanel input[type="text"] { margin-top: 0; }
 
   button { background: var(--accent); color: var(--accent-text); border: none; border-radius: var(--btn-radius); padding: 14px 16px; font-weight: 700; font-size: 16px; width: 100%; cursor: pointer; transition: opacity 0.15s; }
   button:disabled { background: var(--input-bg); color: var(--muted); opacity: 0.7; }
@@ -102,8 +85,27 @@
   .done-tag { color: var(--accent); font-size: 11px; font-weight: 700; margin-left: 6px; }
   .slot-badge { background: var(--accent); color: var(--accent-text); font-weight: 800; padding: 4px 10px; border-radius: 6px; font-size: 13px; min-width: 52px; text-align: center; }
   
+  /* 🚀 НИЖНЯЯ ПАНЕЛЬ (Кнопка) */
   .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--bar-bg); padding: 12px 16px 16px; border-top: 1px solid var(--border); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); z-index: 100; }
   
+  /* 🚀 ПЛАВАЮЩАЯ ПАНЕЛЬ (Поиск + Партии, прилипает к кнопке) */
+  #floatingControls {
+    position: fixed;
+    bottom: 76px; /* Высота нижней панели с кнопкой */
+    left: 0;
+    right: 0;
+    background: var(--bar-bg);
+    padding: 12px 16px 8px;
+    border-top: 1px solid var(--border);
+    z-index: 90;
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.15);
+    display: none;
+  }
+  #floatingControls input[type="text"] { margin-top: 0; margin-bottom: 8px; }
+  #floatingControls .btn-row { margin-bottom: 4px; }
+
   /* 🚀 Прогресс записи прямо в кнопке */
   #btnWrite { position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; }
   #btnProgressBg { position: absolute; top: 0; left: 0; bottom: 0; width: 0%; background: rgba(0,0,0,0.15); transition: width 0.2s ease; z-index: 0; }
@@ -119,7 +121,7 @@
   input:checked + .slider { background-color: var(--accent); border-color: var(--accent); }
   input:checked + .slider:before { transform: translateX(20px); background-color: var(--accent-text); }
 
-  #btnTop { position: fixed; right: 16px; bottom: 240px; width: 44px; height: 44px; border-radius: 50%; background: var(--card); color: var(--accent); border: 1.5px solid var(--accent); font-size: 20px; padding: 0; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.35); z-index: 70; }
+  #btnTop { position: fixed; right: 16px; bottom: 280px; width: 44px; height: 44px; border-radius: 50%; background: var(--card); color: var(--accent); border: 1.5px solid var(--accent); font-size: 20px; padding: 0; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.35); z-index: 70; }
 
   /* iOS-style Toast */
   .toast-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 9999; opacity: 0; transition: opacity 0.2s; }
@@ -155,12 +157,11 @@
   <div id="deviceSlots" class="slots-grid" style="display:none;"></div>
 </div>
 
-<!-- Верхний блок с настройками, который будет уезжать при прокрутке -->
+<!-- Верхний блок с выбором файла, уезжает при скролле -->
 <div class="panel">
   <div style="font-size:14px; font-weight:600;">2. Выберите JSON-файл с ключами</div>
   <input type="file" id="fileInput" accept=".json,application/json">
   
-  <!-- 🚀 Тумблер авто-перехода -->
   <div class="switch-container" id="autoAdvanceRow" style="display:none;">
     <span class="switch-label">Авто-переход к след. партии</span>
     <label class="switch">
@@ -170,8 +171,12 @@
   </div>
 </div>
 
-<!-- 🚀 Плавающая панель (прилипает над кнопкой записи) -->
-<div class="panel" id="stickyPanel">
+<div id="cardsList"></div>
+
+<button id="btnTop" type="button" title="Наверх">↑</button>
+
+<!-- 🚀 Плавающая панель прилипает над кнопкой -->
+<div id="floatingControls">
   <input type="text" id="searchInput" placeholder="Поиск по названию или UID...">
   <div id="batchesBar" class="batches-bar"></div>
   <div id="actionRow" class="btn-row">
@@ -179,10 +184,6 @@
     <button id="btnClear" type="button" class="secondary">Снять (0/8)</button>
   </div>
 </div>
-
-<div id="cardsList"></div>
-
-<button id="btnTop" type="button" title="Наверх">↑</button>
 
 <div class="bottom-bar">
   <button id="btnWrite" type="button" disabled>
@@ -221,7 +222,7 @@
   const searchInput = document.getElementById('searchInput');
   const cardsListEl = document.getElementById('cardsList');
   const autoAdvanceCheck = document.getElementById('autoAdvanceCheck');
-  const stickyPanel = document.getElementById('stickyPanel');
+  const floatingControls = document.getElementById('floatingControls');
   const autoAdvanceRow = document.getElementById('autoAdvanceRow');
 
   let isLight = localStorage.getItem('cu_theme') === 'light';
@@ -602,7 +603,7 @@
         writtenSet.clear();
         
         // Показываем плавающую панель и тумблер
-        stickyPanel.style.display = 'block';
+        floatingControls.style.display = 'block';
         autoAdvanceRow.style.display = 'flex';
         
         selectBatch(0, false);
@@ -747,8 +748,8 @@
            if(!isWriting) selectBatch(currentBatch + 1, true);
         }, 500);
       } else {
-        if (stickyPanel.style.display !== 'none') {
-          stickyPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (floatingControls.style.display !== 'none') {
+          floatingControls.scrollIntoView({ behavior: 'smooth', block: 'center' });
         } else {
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }
