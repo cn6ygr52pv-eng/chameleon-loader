@@ -122,6 +122,7 @@
   const NUS_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
   const NUS_TX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
   const NUS_RX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+  const BLE_CHUNK_SIZE = 180; // Оптимизация MTU (iOS обычно 185)
 
   let bleDevice = null, txChar = null, rxChar = null;
   let rxBuffer = new Uint8Array(0);
@@ -260,11 +261,11 @@
       const timer = setTimeout(() => { pendingResolver = null; reject(new Error('Таймаут команды ' + cmd)); }, 5000);
       pendingResolver = { cmd, resolve: (res) => { clearTimeout(timer); resolve(res); } };
     });
-    for (let i = 0; i < frame.length; i += 20) {
-      await txChar.writeValueWithoutResponse(frame.slice(i, i + 20));
+    // Отправляем увеличенными чанками
+    for (let i = 0; i < frame.length; i += BLE_CHUNK_SIZE) {
+      await txChar.writeValueWithoutResponse(frame.slice(i, i + BLE_CHUNK_SIZE));
     }
     const res = await respPromise;
-    // 0x0000 (HF_TAG_OK) и 0x0068 (DEVICE_SUCCESS) — оба означают успех
     if (res.status !== 0 && res.status !== 0x0068) {
       throw new Error('Команда ' + cmd + ' вернула ошибку 0x' + res.status.toString(16));
     }
@@ -278,7 +279,6 @@
     let html = '';
     for (let slot = 0; slot < 8; slot++) {
       try {
-        // 1008: GET_SLOT_TAG_NICK, формат: [slot_number, sense_type]
         const resp = await sendCmd(1008, Uint8Array.of(slot, 2), true);
         const nick = (resp.data.length > 0) ? decoder.decode(resp.data).replace(/\0/g, '').trim() : '';
         if (nick) {
@@ -529,7 +529,6 @@
     btnWrite.disabled = true;
     logEl.textContent = '';
     try {
-      // Режим эмулятора (TAG)
       await sendCmd(1001, Uint8Array.of(0), true);
 
       for (let i = 0; i < selectedIndices.length; i++) {
@@ -541,24 +540,17 @@
         const tagHi = (card.tag >> 8) & 0xff;
         const tagLo = card.tag & 0xff;
 
-        // 1. Активировать слот (1003)
         await sendCmd(1003, Uint8Array.of(slot), true);
-
-        // 2. Установить тип тега для слота (1004)
         await sendCmd(1004, Uint8Array.of(slot, tagHi, tagLo), true);
-
-        // 3. Включить HF-эмуляцию (1006). sense_type=2 (HF), enable=1
         await sendCmd(1006, Uint8Array.of(slot, 2, 1), true);
 
-        // 4. Записать nickname (1007). Формат: [slot_number, sense_type, ...name]
         let nickBytes = encodeNickSafe(card.name);
         if (nickBytes.length === 0) nickBytes = new TextEncoder().encode('Slot ' + (i + 1));
         const nickPayload = new Uint8Array(2 + nickBytes.length);
-        nickPayload.set(Uint8Array.of(slot, 2), 0); // sense_type = 2 (HF)
+        nickPayload.set(Uint8Array.of(slot, 2), 0);
         nickPayload.set(nickBytes, 2);
         await sendCmd(1007, nickPayload, true);
 
-        // 5. Anti-collision данные (4001)
         const uidB = hexToBytes(card.uid);
         const atqaB = hexToBytes(card.atqa);
         const sakB = hexToBytes(card.sak);
@@ -571,21 +563,24 @@
         antiColl.set(Uint8Array.of(0x00), p);
         await sendCmd(4001, antiColl);
 
-        // 6. Запись 64 блоков по одному (4000)
-        for (let blockIdx = 0; blockIdx < 64; blockIdx++) {
-          const blockBytes = hexToBytes(card.blocks[blockIdx] || '');
-          if (blockBytes.length !== 16) continue;
-
-          const writePayload = new Uint8Array(17);
-          writePayload[0] = blockIdx;
-          writePayload.set(blockBytes, 1);
-          await sendCmd(4000, writePayload);
+        // 🚀 ОПТИМИЗАЦИЯ: пакетная запись по 31 блок за команду
+        const MAX_BLOCKS_PER_CMD = 31;
+        for (let startBlock = 0; startBlock < 64; startBlock += MAX_BLOCKS_PER_CMD) {
+          const count = Math.min(MAX_BLOCKS_PER_CMD, 64 - startBlock);
+          const payload = new Uint8Array(1 + count * 16);
+          payload[0] = startBlock; // block_start
+          for (let b = 0; b < count; b++) {
+            const blockBytes = hexToBytes(card.blocks[startBlock + b] || '');
+            if (blockBytes.length === 16) {
+              payload.set(blockBytes, 1 + b * 16);
+            }
+          }
+          await sendCmd(4000, payload);
         }
 
         writtenSet.add(cardIdx);
       }
 
-      // Активировать слот 0 и сохранить настройки
       await sendCmd(1003, Uint8Array.of(0), true);
       await sendCmd(1009, null, true);
       await refreshDeviceSlots();
