@@ -42,8 +42,8 @@
     --bar-bg: #ffffff; --shadow: 0 2px 8px rgba(255, 109, 0, 0.08);
   }
 
-  /* Увеличен padding снизу, чтобы карточки не уходили под плавающую панель */
-  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 280px; transition: background 0.2s, color 0.2s; }
+  /* Уменьшили нижний отступ, так как панель стала компактнее */
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 210px; transition: background 0.2s, color 0.2s; }
   
   .header-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
   h2 { margin: 0; font-size: 19px; }
@@ -55,20 +55,9 @@
 
   button { background: var(--accent); color: var(--accent-text); border: none; border-radius: var(--btn-radius); padding: 14px 16px; font-weight: 700; font-size: 16px; width: 100%; cursor: pointer; transition: opacity 0.15s; }
   button:disabled { background: var(--input-bg); color: var(--muted); opacity: 0.7; }
-  button.secondary { background: var(--input-bg); color: var(--text); margin-top: 8px; border: 1px solid var(--border); }
   button.danger { background: var(--danger); color: #fff; margin-top: 8px; }
-  .btn-row { display: flex; gap: 8px; margin-top: 8px; }
-  .btn-row button { margin-top: 0; font-size: 14px; padding: 11px 8px; }
   
-  /* 🚀 Горизонтальный скролл партий */
-  .batches-bar { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; margin-top: 8px; padding-bottom: 4px; scrollbar-width: none; -ms-overflow-style: none; scroll-snap-type: x mandatory; }
-  .batches-bar::-webkit-scrollbar { display: none; }
-  .batch-btn { width: auto; flex: 0 0 auto; padding: 8px 14px; font-size: 13px; border-radius: 8px; background: var(--input-bg); color: var(--text); border: 1px solid var(--border); scroll-snap-align: start; }
-  .batch-btn.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-  .batch-btn.done { border-color: var(--accent); color: var(--accent); }
-  .batch-btn.active.done { color: var(--accent-text); }
-
-  input[type="file"], input[type="text"] { width: 100%; box-sizing: border-box; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; font-size: 15px; margin-top: 8px; }
+  input[type="file"] { width: 100%; box-sizing: border-box; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; font-size: 15px; margin-top: 8px; }
   
   /* 🚀 Улучшенная визуализация слотов (только HF) */
   .slots-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
@@ -88,14 +77,14 @@
   /* 🚀 НИЖНЯЯ ПАНЕЛЬ (Кнопка) */
   .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--bar-bg); padding: 12px 16px 16px; border-top: 1px solid var(--border); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); z-index: 100; }
   
-  /* 🚀 ПЛАВАЮЩАЯ ПАНЕЛЬ (Поиск + Партии, прилипает к кнопке) */
+  /* 🚀 ПЛАВАЮЩАЯ ПАНЕЛЬ (Компактная версия) */
   #floatingControls {
     position: fixed;
-    bottom: 76px; /* Высота нижней панели с кнопкой */
+    bottom: 78px; /* Высота нижней панели с кнопкой */
     left: 0;
     right: 0;
     background: var(--bar-bg);
-    padding: 12px 16px 8px;
+    padding: 8px 12px;
     border-top: 1px solid var(--border);
     z-index: 90;
     backdrop-filter: var(--blur);
@@ -103,8 +92,50 @@
     box-shadow: 0 -4px 16px rgba(0,0,0,0.15);
     display: none;
   }
-  #floatingControls input[type="text"] { margin-top: 0; margin-bottom: 8px; }
-  #floatingControls .btn-row { margin-bottom: 4px; }
+
+  /* Поиск и кнопки в одну строку */
+  .search-row { display: flex; gap: 6px; margin-bottom: 6px; }
+  .search-row input {
+    margin: 0;
+    flex: 1;
+    padding: 8px 12px;
+    height: 38px;
+    font-size: 14px;
+    border-radius: 8px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    box-sizing: border-box;
+  }
+  .compact-btn {
+    width: auto;
+    min-width: 42px;
+    height: 38px;
+    padding: 0 10px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: bold;
+    border-radius: 8px;
+    background: var(--input-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .compact-btn:disabled {
+    opacity: 0.5;
+  }
+
+  /* Горизонтальный скролл партий */
+  .batches-bar { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; padding-bottom: 2px; scrollbar-width: none; -ms-overflow-style: none; scroll-snap-type: x mandatory; }
+  .batches-bar::-webkit-scrollbar { display: none; }
+  .batch-btn { width: auto; flex: 0 0 auto; padding: 6px 12px; font-size: 12px; border-radius: 6px; background: var(--input-bg); color: var(--text); border: 1px solid var(--border); scroll-snap-align: start; font-weight: 600; cursor: pointer; }
+  .batch-btn.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .batch-btn.done { border-color: var(--accent); color: var(--accent); }
+  .batch-btn.active.done { color: var(--accent-text); }
 
   /* 🚀 Прогресс записи прямо в кнопке */
   #btnWrite { position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; }
@@ -121,7 +152,7 @@
   input:checked + .slider { background-color: var(--accent); border-color: var(--accent); }
   input:checked + .slider:before { transform: translateX(20px); background-color: var(--accent-text); }
 
-  #btnTop { position: fixed; right: 16px; bottom: 280px; width: 44px; height: 44px; border-radius: 50%; background: var(--card); color: var(--accent); border: 1.5px solid var(--accent); font-size: 20px; padding: 0; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.35); z-index: 70; }
+  #btnTop { position: fixed; right: 16px; bottom: 230px; width: 44px; height: 44px; border-radius: 50%; background: var(--card); color: var(--accent); border: 1.5px solid var(--accent); font-size: 20px; padding: 0; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.35); z-index: 70; }
 
   /* iOS-style Toast */
   .toast-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 9999; opacity: 0; transition: opacity 0.2s; }
@@ -175,14 +206,14 @@
 
 <button id="btnTop" type="button" title="Наверх">↑</button>
 
-<!-- 🚀 Плавающая панель прилипает над кнопкой -->
+<!-- 🚀 Компактная плавающая панель -->
 <div id="floatingControls">
-  <input type="text" id="searchInput" placeholder="Поиск по названию или UID...">
-  <div id="batchesBar" class="batches-bar"></div>
-  <div id="actionRow" class="btn-row">
-    <button id="btnNextBatch" type="button" class="secondary">Следующие 8 →</button>
-    <button id="btnClear" type="button" class="secondary">Снять (0/8)</button>
+  <div class="search-row">
+    <input type="text" id="searchInput" placeholder="Поиск по названию или UID...">
+    <button id="btnClear" class="compact-btn" title="Снять выделение">✕</button>
+    <button id="btnNextBatch" class="compact-btn" title="Следующая партия">→</button>
   </div>
+  <div id="batchesBar" class="batches-bar"></div>
 </div>
 
 <div class="bottom-bar">
@@ -217,7 +248,6 @@
   const btnTop = document.getElementById('btnTop');
   const btnTheme = document.getElementById('btnTheme');
   const styleSelect = document.getElementById('styleSelect');
-  const actionRow = document.getElementById('actionRow');
   const batchesBar = document.getElementById('batchesBar');
   const searchInput = document.getElementById('searchInput');
   const cardsListEl = document.getElementById('cardsList');
@@ -602,7 +632,6 @@
         allCards = parseJsonCards(JSON.parse(ev.target.result));
         writtenSet.clear();
         
-        // Показываем плавающую панель и тумблер
         floatingControls.style.display = 'block';
         autoAdvanceRow.style.display = 'flex';
         
@@ -654,13 +683,25 @@
     if (isWriting) return;
     const count = selectedIndices.length;
     const totalBatches = Math.ceil(allCards.length / 8);
-    btnClear.textContent = 'Снять (' + count + '/8)';
+    
+    // 🚀 Обновляем компактные кнопки вместо огромных текстовых
+    btnClear.title = 'Снять (' + count + '/8)';
+    if (count > 0) {
+       btnClear.style.color = 'var(--danger)'; // Подсветим крестик красным, если есть что снимать
+    } else {
+       btnClear.style.color = 'var(--text)';
+    }
+
     if (totalBatches > 1) {
       const nextB = (currentBatch + 1) % totalBatches;
       const nextStart = nextB * 8 + 1;
       const nextEnd = Math.min((nextB + 1) * 8, allCards.length);
-      btnNextBatch.textContent = 'Следующие (' + nextStart + '–' + nextEnd + ') →';
+      btnNextBatch.style.display = 'flex';
+      btnNextBatch.title = 'Следующие (' + nextStart + '–' + nextEnd + ')';
+    } else {
+      btnNextBatch.style.display = 'none';
     }
+
     btnWriteText.textContent = count > 0 ? 'Записать в слоты 1–' + count : 'Выберите ключи (0 / 8)';
     btnWrite.disabled = !(bleDevice && bleDevice.gatt && bleDevice.gatt.connected && count > 0);
     if (!btnWrite.disabled) {
@@ -748,8 +789,10 @@
            if(!isWriting) selectBatch(currentBatch + 1, true);
         }, 500);
       } else {
-        if (floatingControls.style.display !== 'none') {
-          floatingControls.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Скроллим к первой выбранной карточке или наверх, чтобы плавающая панель не мешала
+        const firstSelected = cardsListEl.querySelector('.card-item.selected');
+        if (firstSelected) {
+          firstSelected.scrollIntoView({ behavior: 'smooth', block: 'center' });
         } else {
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }
