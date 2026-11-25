@@ -42,7 +42,9 @@
     --bar-bg: #ffffff; --shadow: 0 2px 8px rgba(255, 109, 0, 0.08);
   }
 
-  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 165px; transition: background 0.2s, color 0.2s; }
+  /* Уменьшили нижний отступ, так как лог убран */
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 110px; transition: background 0.2s, color 0.2s; }
+  
   .header-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
   h2 { margin: 0; font-size: 19px; }
   .theme-controls { display: flex; gap: 6px; align-items: center; }
@@ -72,9 +74,27 @@
   .card-uid { font-family: monospace; color: var(--muted); font-size: 13px; margin-top: 3px; }
   .done-tag { color: var(--accent); font-size: 11px; font-weight: 700; margin-left: 6px; }
   .slot-badge { background: var(--accent); color: var(--accent-text); font-weight: 800; padding: 4px 10px; border-radius: 6px; font-size: 13px; min-width: 52px; text-align: center; }
-  .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--bar-bg); padding: 12px 16px; border-top: 1px solid var(--border); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); z-index: 10; }
-  #log { font-family: monospace; font-size: 12px; color: var(--accent); white-space: pre-wrap; max-height: 90px; overflow-y: auto; margin-top: 8px; }
-  #btnTop { position: fixed; right: 16px; bottom: 135px; width: 44px; height: 44px; border-radius: 50%; background: var(--card); color: var(--accent); border: 1.5px solid var(--accent); font-size: 20px; padding: 0; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.35); z-index: 20; }
+  
+  /* Нижняя панель */
+  .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--bar-bg); padding: 12px 16px 16px; border-top: 1px solid var(--border); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); z-index: 10; }
+  
+  /* Полоса загрузки */
+  .progress-container { width: 100%; height: 6px; background: var(--border); border-radius: 3px; margin-bottom: 10px; overflow: hidden; display: none; }
+  .progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.2s ease; border-radius: 3px; }
+
+  #btnTop { position: fixed; right: 16px; bottom: 90px; width: 44px; height: 44px; border-radius: 50%; background: var(--card); color: var(--accent); border: 1.5px solid var(--accent); font-size: 20px; padding: 0; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.35); z-index: 20; }
+
+  /* iOS-style Toast */
+  .toast-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 9999; opacity: 0; transition: opacity 0.2s; }
+  .toast-overlay.show { display: flex; opacity: 1; }
+  .toast-card { background: var(--card); padding: 24px; border-radius: 20px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-width: 280px; width: 85%; transform: scale(0.95); transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+  .toast-overlay.show .toast-card { transform: scale(1); }
+  .toast-icon { width: 60px; height: 60px; margin: 0 auto 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; }
+  .toast-icon.success { background: #34c759; }
+  .toast-icon.error { background: #ff3b30; }
+  .toast-icon svg { width: 32px; height: 32px; }
+  .toast-msg { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 20px; line-height: 1.4; word-wrap: break-word; }
+  .toast-btn { background: var(--input-bg); color: var(--text); border: 1px solid var(--border); padding: 12px 20px; border-radius: 12px; font-weight: 600; cursor: pointer; width: 100%; font-size: 16px; }
 </style>
 </head>
 <body>
@@ -114,15 +134,17 @@
 <button id="btnTop" type="button" title="Наверх">↑</button>
 
 <div class="bottom-bar">
+  <div class="progress-container" id="progressContainer">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
   <button id="btnWrite" type="button" disabled>Выберите ключи (0 / 8)</button>
-  <div id="log"></div>
 </div>
 
 <script>
   const NUS_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
   const NUS_TX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
   const NUS_RX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
-  const BLE_CHUNK_SIZE = 180; // Оптимизация MTU (iOS обычно 185)
+  const BLE_CHUNK_SIZE = 180;
 
   let bleDevice = null, txChar = null, rxChar = null;
   let rxBuffer = new Uint8Array(0);
@@ -130,7 +152,6 @@
   let allCards = [], selectedIndices = [], writtenSet = new Set();
   let currentBatch = 0;
 
-  const logEl = document.getElementById('log');
   const statusEl = document.getElementById('status');
   const deviceSlotsEl = document.getElementById('deviceSlots');
   const btnConnect = document.getElementById('btnConnect');
@@ -145,9 +166,54 @@
   const batchesBar = document.getElementById('batchesBar');
   const searchInput = document.getElementById('searchInput');
   const cardsListEl = document.getElementById('cardsList');
+  
+  // Элементы прогресс-бара
+  const progressContainer = document.getElementById('progressContainer');
+  const progressFill = document.getElementById('progressFill');
 
   let isLight = localStorage.getItem('cu_theme') === 'light';
   let uiStyle = localStorage.getItem('cu_style') || 'default';
+
+  // --- Всплывающие сообщения (iOS-style) ---
+  const svgCheck = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+  const svgCross = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+
+  function showToast(type, message) {
+    const overlay = document.createElement('div');
+    overlay.className = 'toast-overlay';
+    
+    const iconSvg = type === 'success' ? svgCheck : svgCross;
+    const btnText = type === 'success' ? 'Готово' : 'Закрыть';
+    
+    overlay.innerHTML = `
+      <div class="toast-card">
+        <div class="toast-icon ${type}">${iconSvg}</div>
+        <div class="toast-msg">${message}</div>
+        <button class="toast-btn">${btnText}</button>
+      </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // Показываем с анимацией
+    requestAnimationFrame(() => overlay.classList.add('show'));
+    
+    // Закрытие по кнопке
+    overlay.querySelector('.toast-btn').addEventListener('click', () => {
+      overlay.classList.remove('show');
+      setTimeout(() => overlay.remove(), 200);
+    });
+    
+    // Автоматическое скрытие успеха через 2 секунды
+    if (type === 'success') {
+      setTimeout(() => {
+        if (document.body.contains(overlay)) {
+          overlay.classList.remove('show');
+          setTimeout(() => overlay.remove(), 200);
+        }
+      }, 2000);
+    }
+  }
 
   function applyAppearance() {
     document.body.classList.remove('light', 'style-ios', 'style-cyber');
@@ -178,11 +244,6 @@
   btnTop.addEventListener('click', () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
-
-  function log(msg) {
-    logEl.textContent += msg + '\n';
-    logEl.scrollTop = logEl.scrollHeight;
-  }
 
   function encodeNickSafe(str) {
     const encoder = new TextEncoder();
@@ -261,13 +322,12 @@
       const timer = setTimeout(() => { pendingResolver = null; reject(new Error('Таймаут команды ' + cmd)); }, 5000);
       pendingResolver = { cmd, resolve: (res) => { clearTimeout(timer); resolve(res); } };
     });
-    // Отправляем увеличенными чанками
     for (let i = 0; i < frame.length; i += BLE_CHUNK_SIZE) {
       await txChar.writeValueWithoutResponse(frame.slice(i, i + BLE_CHUNK_SIZE));
     }
     const res = await respPromise;
     if (res.status !== 0 && res.status !== 0x0068) {
-      throw new Error('Команда ' + cmd + ' вернула ошибку 0x' + res.status.toString(16));
+      throw new Error('Команда ' + cmd + ' (ошибка 0x' + res.status.toString(16) + ')');
     }
     return res;
   }
@@ -466,11 +526,9 @@
         searchInput.style.display = 'block';
         batchesBar.style.display = 'flex';
         actionRow.style.display = 'flex';
-        logEl.textContent = '';
-        log('Загружено ключей: ' + allCards.length + ' (партий: ' + Math.ceil(allCards.length / 8) + ')');
         selectBatch(0, false);
       } catch (err) {
-        alert('Ошибка JSON: ' + err.message);
+        showToast('error', 'Ошибка JSON: ' + err.message);
       }
     };
     reader.readAsText(file);
@@ -488,7 +546,7 @@
     const pos = selectedIndices.indexOf(idx);
     if (pos !== -1) selectedIndices.splice(pos, 1);
     else {
-      if (selectedIndices.length >= 8) { alert('Максимум 8 ключей'); return; }
+      if (selectedIndices.length >= 8) { showToast('error', 'Максимум 8 ключей'); return; }
       selectedIndices.push(idx);
     }
     renderCards();
@@ -527,15 +585,18 @@
 
   btnWrite.addEventListener('click', async () => {
     btnWrite.disabled = true;
-    logEl.textContent = '';
+    progressContainer.style.display = 'block';
+    progressFill.style.width = '0%';
+    
+    const total = selectedIndices.length;
+    
     try {
       await sendCmd(1001, Uint8Array.of(0), true);
 
-      for (let i = 0; i < selectedIndices.length; i++) {
+      for (let i = 0; i < total; i++) {
         const cardIdx = selectedIndices.at(i);
         const card = allCards.at(cardIdx);
         const slot = i;
-        log('[Слот ' + (i + 1) + '] ' + card.name + ' (' + card.uid + ')...');
 
         const tagHi = (card.tag >> 8) & 0xff;
         const tagLo = card.tag & 0xff;
@@ -563,13 +624,12 @@
         antiColl.set(Uint8Array.of(0x00), p);
         await sendCmd(4001, antiColl);
 
-        // 🚀 ОПТИМИЗАЦИЯ: пакетная запись по 31 блок за команду
         const MAX_BLOCKS_PER_CMD = 31;
         for (let startBlock = 0; startBlock < 64; startBlock += MAX_BLOCKS_PER_CMD) {
-          const count = Math.min(MAX_BLOCKS_PER_CMD, 64 - startBlock);
-          const payload = new Uint8Array(1 + count * 16);
-          payload[0] = startBlock; // block_start
-          for (let b = 0; b < count; b++) {
+          const countBlocks = Math.min(MAX_BLOCKS_PER_CMD, 64 - startBlock);
+          const payload = new Uint8Array(1 + countBlocks * 16);
+          payload[0] = startBlock;
+          for (let b = 0; b < countBlocks; b++) {
             const blockBytes = hexToBytes(card.blocks[startBlock + b] || '');
             if (blockBytes.length === 16) {
               payload.set(blockBytes, 1 + b * 16);
@@ -579,6 +639,10 @@
         }
 
         writtenSet.add(cardIdx);
+        
+        // Обновляем прогресс после каждой карты
+        const percent = Math.round(((i + 1) / total) * 100);
+        progressFill.style.width = percent + '%';
       }
 
       await sendCmd(1003, Uint8Array.of(0), true);
@@ -586,12 +650,26 @@
       await refreshDeviceSlots();
       renderBatches();
       renderCards();
-      log('✅ Готово! Нажмите «Следующие» для новой партии.');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      
+      // Успешное завершение
+      showToast('success', 'Запись успешно завершена!');
+      
+      // Прокрутка к кнопкам партий
+      if (actionRow.style.display !== 'none') {
+        actionRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
     } catch (e) {
-      log('❌ Ошибка: ' + e.message);
+      showToast('error', 'Ошибка: ' + e.message);
     } finally {
       updateWriteButton();
+      // Прячем полосу загрузки через секунду после завершения
+      setTimeout(() => {
+        progressContainer.style.display = 'none';
+        progressFill.style.width = '0%';
+      }, 1000);
     }
   });
 </script>
