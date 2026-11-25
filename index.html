@@ -42,31 +42,42 @@
     --bar-bg: #ffffff; --shadow: 0 2px 8px rgba(255, 109, 0, 0.08);
   }
 
-  /* Уменьшили нижний отступ, так как лог убран */
   body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 110px; transition: background 0.2s, color 0.2s; }
-  
   .header-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
   h2 { margin: 0; font-size: 19px; }
   .theme-controls { display: flex; gap: 6px; align-items: center; }
   .mini-btn { width: auto; padding: 6px 10px; font-size: 12px; font-weight: 600; border-radius: 8px; background: var(--card); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow); }
   select.mini-btn { appearance: none; -webkit-appearance: none; padding-right: 10px; }
+  
   .panel { background: var(--card); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; border: 1px solid var(--border); box-shadow: var(--shadow); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
+  
+  /* 🚀 Липкая панель поиска и партий */
+  #controlsPanel { position: sticky; top: 8px; z-index: 50; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+
   button { background: var(--accent); color: var(--accent-text); border: none; border-radius: var(--btn-radius); padding: 14px 16px; font-weight: 700; font-size: 16px; width: 100%; cursor: pointer; transition: opacity 0.15s; }
   button:disabled { background: var(--input-bg); color: var(--muted); opacity: 0.7; }
   button.secondary { background: var(--input-bg); color: var(--text); margin-top: 8px; border: 1px solid var(--border); }
   button.danger { background: var(--danger); color: #fff; margin-top: 8px; }
   .btn-row { display: flex; gap: 8px; margin-top: 8px; }
   .btn-row button { margin-top: 0; font-size: 14px; padding: 11px 8px; }
-  .batches-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  .batch-btn { width: auto; flex: 1 1 auto; min-width: 64px; padding: 8px 10px; font-size: 13px; border-radius: 8px; background: var(--input-bg); color: var(--text); border: 1px solid var(--border); }
+  
+  /* 🚀 Горизонтальный скролл партий */
+  .batches-bar { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; margin-top: 10px; padding-bottom: 4px; scrollbar-width: none; -ms-overflow-style: none; scroll-snap-type: x mandatory; }
+  .batches-bar::-webkit-scrollbar { display: none; }
+  .batch-btn { width: auto; flex: 0 0 auto; padding: 8px 14px; font-size: 13px; border-radius: 8px; background: var(--input-bg); color: var(--text); border: 1px solid var(--border); scroll-snap-align: start; }
   .batch-btn.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
   .batch-btn.done { border-color: var(--accent); color: var(--accent); }
   .batch-btn.active.done { color: var(--accent-text); }
+
   input[type="file"], input[type="text"] { width: 100%; box-sizing: border-box; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; font-size: 15px; margin-top: 8px; }
+  
+  /* 🚀 Улучшенная визуализация слотов (только HF) */
   .slots-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
-  .slot-pill { background: var(--card-alt); padding: 6px 8px; border-radius: 6px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid var(--border); }
-  .slot-pill span { color: var(--accent); font-weight: 700; margin-right: 4px; }
-  .slot-pill.empty { color: var(--muted); }
+  .slot-pill { display: flex; align-items: center; gap: 6px; background: var(--card-alt); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 12px; }
+  .slot-hf-icon { width: 22px; height: 22px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 9px; flex-shrink: 0; }
+  .slot-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .slot-name span { font-weight: 700; margin-right: 2px; }
+
   .card-item { display: flex; align-items: center; justify-content: space-between; background: var(--card); padding: 12px; border-radius: var(--radius); margin-bottom: 8px; border: 1.5px solid var(--border); box-shadow: var(--shadow); cursor: pointer; }
   .card-item.selected { border-color: var(--accent); background: var(--selected-bg); }
   .card-info { flex: 1; padding-right: 10px; }
@@ -75,12 +86,22 @@
   .done-tag { color: var(--accent); font-size: 11px; font-weight: 700; margin-left: 6px; }
   .slot-badge { background: var(--accent); color: var(--accent-text); font-weight: 800; padding: 4px 10px; border-radius: 6px; font-size: 13px; min-width: 52px; text-align: center; }
   
-  /* Нижняя панель */
-  .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--bar-bg); padding: 12px 16px 16px; border-top: 1px solid var(--border); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); z-index: 10; }
+  .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--bar-bg); padding: 12px 16px 16px; border-top: 1px solid var(--border); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); z-index: 100; }
   
-  /* Полоса загрузки */
-  .progress-container { width: 100%; height: 6px; background: var(--border); border-radius: 3px; margin-bottom: 10px; overflow: hidden; display: none; }
-  .progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.2s ease; border-radius: 3px; }
+  /* 🚀 Прогресс записи прямо в кнопке */
+  #btnWrite { position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+  #btnProgressBg { position: absolute; top: 0; left: 0; bottom: 0; width: 0%; background: rgba(0,0,0,0.15); transition: width 0.2s ease; z-index: 0; }
+  #btnWriteText { position: relative; z-index: 1; }
+
+  /* 🚀 iOS Switch для авто-перехода */
+  .switch-container { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding: 0 4px; }
+  .switch-label { font-size: 14px; color: var(--text); font-weight: 500; }
+  .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--input-bg); transition: .3s; border-radius: 24px; border: 1px solid var(--border); }
+  .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 2px; bottom: 2px; background-color: var(--text); transition: .3s; border-radius: 50%; }
+  input:checked + .slider { background-color: var(--accent); border-color: var(--accent); }
+  input:checked + .slider:before { transform: translateX(20px); background-color: var(--accent-text); }
 
   #btnTop { position: fixed; right: 16px; bottom: 90px; width: 44px; height: 44px; border-radius: 50%; background: var(--card); color: var(--accent); border: 1.5px solid var(--accent); font-size: 20px; padding: 0; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.35); z-index: 20; }
 
@@ -118,7 +139,8 @@
   <div id="deviceSlots" class="slots-grid" style="display:none;"></div>
 </div>
 
-<div class="panel">
+<!-- 🚀 Липкая панель -->
+<div class="panel" id="controlsPanel">
   <div style="font-size:14px; font-weight:600;">2. Выберите JSON-файл с ключами</div>
   <input type="file" id="fileInput" accept=".json,application/json">
   <input type="text" id="searchInput" placeholder="Поиск по названию или UID..." style="display:none;">
@@ -127,6 +149,14 @@
     <button id="btnNextBatch" type="button" class="secondary">Следующие 8 →</button>
     <button id="btnClear" type="button" class="secondary">Снять (0/8)</button>
   </div>
+  <!-- 🚀 Тумблер авто-перехода -->
+  <div class="switch-container">
+    <span class="switch-label">Авто-переход к след. партии</span>
+    <label class="switch">
+      <input type="checkbox" id="autoAdvanceCheck">
+      <span class="slider"></span>
+    </label>
+  </div>
 </div>
 
 <div id="cardsList"></div>
@@ -134,10 +164,10 @@
 <button id="btnTop" type="button" title="Наверх">↑</button>
 
 <div class="bottom-bar">
-  <div class="progress-container" id="progressContainer">
-    <div class="progress-fill" id="progressFill"></div>
-  </div>
-  <button id="btnWrite" type="button" disabled>Выберите ключи (0 / 8)</button>
+  <button id="btnWrite" type="button" disabled>
+    <div id="btnProgressBg"></div>
+    <span id="btnWriteText">Выберите ключи (0 / 8)</span>
+  </button>
 </div>
 
 <script>
@@ -151,12 +181,15 @@
   let pendingResolver = null;
   let allCards = [], selectedIndices = [], writtenSet = new Set();
   let currentBatch = 0;
+  let isWriting = false; // 🚀 Флаг блокировки
 
   const statusEl = document.getElementById('status');
   const deviceSlotsEl = document.getElementById('deviceSlots');
   const btnConnect = document.getElementById('btnConnect');
   const btnDisconnect = document.getElementById('btnDisconnect');
   const btnWrite = document.getElementById('btnWrite');
+  const btnWriteText = document.getElementById('btnWriteText');
+  const btnProgressBg = document.getElementById('btnProgressBg');
   const btnNextBatch = document.getElementById('btnNextBatch');
   const btnClear = document.getElementById('btnClear');
   const btnTop = document.getElementById('btnTop');
@@ -166,22 +199,30 @@
   const batchesBar = document.getElementById('batchesBar');
   const searchInput = document.getElementById('searchInput');
   const cardsListEl = document.getElementById('cardsList');
-  
-  // Элементы прогресс-бара
-  const progressContainer = document.getElementById('progressContainer');
-  const progressFill = document.getElementById('progressFill');
+  const autoAdvanceCheck = document.getElementById('autoAdvanceCheck');
 
   let isLight = localStorage.getItem('cu_theme') === 'light';
   let uiStyle = localStorage.getItem('cu_style') || 'default';
 
-  // --- Всплывающие сообщения (iOS-style) ---
+  // Настройка авто-перехода
+  autoAdvanceCheck.checked = localStorage.getItem('cu_auto_advance') === 'true';
+  autoAdvanceCheck.addEventListener('change', (e) => {
+    localStorage.setItem('cu_auto_advance', e.target.checked);
+  });
+
+  // --- Всплывающие сообщения (iOS-style) + Вибрация ---
   const svgCheck = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
   const svgCross = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
 
   function showToast(type, message) {
+    // 🚀 Тактильная отдача
+    if (navigator.vibrate) {
+      if (type === 'success') navigator.vibrate(50);
+      if (type === 'error') navigator.vibrate([100, 50, 100]);
+    }
+
     const overlay = document.createElement('div');
     overlay.className = 'toast-overlay';
-    
     const iconSvg = type === 'success' ? svgCheck : svgCross;
     const btnText = type === 'success' ? 'Готово' : 'Закрыть';
     
@@ -194,17 +235,13 @@
     `;
     
     document.body.appendChild(overlay);
-    
-    // Показываем с анимацией
     requestAnimationFrame(() => overlay.classList.add('show'));
     
-    // Закрытие по кнопке
     overlay.querySelector('.toast-btn').addEventListener('click', () => {
       overlay.classList.remove('show');
       setTimeout(() => overlay.remove(), 200);
     });
     
-    // Автоматическое скрытие успеха через 2 секунды
     if (type === 'success') {
       setTimeout(() => {
         if (document.body.contains(overlay)) {
@@ -244,6 +281,23 @@
   btnTop.addEventListener('click', () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
+
+  // 🚀 Блокировка интерфейса
+  function setUILocked(locked) {
+    const els = [btnConnect, btnDisconnect, document.getElementById('fileInput'), searchInput, btnTheme, styleSelect, btnClear, btnNextBatch, autoAdvanceCheck];
+    els.forEach(el => { 
+      if (el) { 
+        el.disabled = locked; 
+        el.style.opacity = locked ? '0.5' : '1'; 
+        el.style.pointerEvents = locked ? 'none' : 'auto';
+      } 
+    });
+    document.querySelectorAll('.batch-btn').forEach(el => { 
+      el.disabled = locked; 
+      el.style.opacity = locked ? '0.5' : '1'; 
+    });
+    cardsListEl.style.pointerEvents = locked ? 'none' : 'auto';
+  }
 
   function encodeNickSafe(str) {
     const encoder = new TextEncoder();
@@ -341,13 +395,19 @@
       try {
         const resp = await sendCmd(1008, Uint8Array.of(slot, 2), true);
         const nick = (resp.data.length > 0) ? decoder.decode(resp.data).replace(/\0/g, '').trim() : '';
-        if (nick) {
-          html += '<div class="slot-pill" title="' + nick + '"><span>' + (slot + 1) + ':</span>' + nick + '</div>';
-        } else {
-          html += '<div class="slot-pill empty"><span>' + (slot + 1) + ':</span>пусто</div>';
-        }
+        
+        // 🚀 Красивая визуализация HF-слотов
+        const isOccupied = !!nick;
+        const iconStyle = isOccupied 
+            ? 'background: var(--accent); color: var(--accent-text);' 
+            : 'background: var(--input-bg); color: var(--muted);';
+            
+        html += `<div class="slot-pill">
+            <div class="slot-hf-icon" style="${iconStyle}">HF</div>
+            <div class="slot-name" title="${nick || 'пусто'}"><span>${slot+1}:</span> ${nick || 'пусто'}</div>
+        </div>`;
       } catch (e) {
-        html += '<div class="slot-pill empty"><span>' + (slot + 1) + ':</span>ошибка</div>';
+        html += `<div class="slot-pill"><div class="slot-hf-icon" style="background:var(--danger);color:#fff;">!</div><div class="slot-name"><span>${slot+1}:</span> ошибка</div></div>`;
       }
     }
     deviceSlotsEl.innerHTML = html;
@@ -510,8 +570,13 @@
       btn.type = 'button';
       btn.className = 'batch-btn' + (b === currentBatch ? ' active' : '') + (allWritten ? ' done' : '');
       btn.textContent = (allWritten ? '✓ ' : '') + start + '–' + end;
-      btn.addEventListener('click', () => selectBatch(b, true));
+      btn.addEventListener('click', () => { if(!isWriting) selectBatch(b, true); });
       batchesBar.appendChild(btn);
+    }
+    // Автоскролл к активной партии
+    const activeBtn = batchesBar.querySelector('.batch-btn.active');
+    if (activeBtn) {
+        activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
   }
 
@@ -537,12 +602,13 @@
   searchInput.addEventListener('input', () => renderCards());
 
   btnNextBatch.addEventListener('click', () => {
-    selectBatch(currentBatch + 1, true);
+    if(!isWriting) selectBatch(currentBatch + 1, true);
   });
 
-  btnClear.addEventListener('click', () => { selectedIndices = []; renderCards(); updateWriteButton(); });
+  btnClear.addEventListener('click', () => { if(!isWriting) { selectedIndices = []; renderCards(); updateWriteButton(); }});
 
   function toggleCard(idx) {
+    if (isWriting) return;
     const pos = selectedIndices.indexOf(idx);
     if (pos !== -1) selectedIndices.splice(pos, 1);
     else {
@@ -570,6 +636,7 @@
   }
 
   function updateWriteButton() {
+    if (isWriting) return; // Не перебиваем текст во время записи
     const count = selectedIndices.length;
     const totalBatches = Math.ceil(allCards.length / 8);
     btnClear.textContent = 'Снять (' + count + '/8)';
@@ -579,14 +646,20 @@
       const nextEnd = Math.min((nextB + 1) * 8, allCards.length);
       btnNextBatch.textContent = 'Следующие (' + nextStart + '–' + nextEnd + ') →';
     }
-    btnWrite.textContent = count > 0 ? 'Записать в слоты 1–' + count : 'Выберите ключи (0 / 8)';
+    btnWriteText.textContent = count > 0 ? 'Записать в слоты 1–' + count : 'Выберите ключи (0 / 8)';
     btnWrite.disabled = !(bleDevice && bleDevice.gatt && bleDevice.gatt.connected && count > 0);
+    if (!btnWrite.disabled) {
+       btnProgressBg.style.width = '0%';
+    }
   }
 
   btnWrite.addEventListener('click', async () => {
+    if (isWriting) return;
+    
+    isWriting = true;
+    setUILocked(true);
     btnWrite.disabled = true;
-    progressContainer.style.display = 'block';
-    progressFill.style.width = '0%';
+    btnProgressBg.style.width = '0%';
     
     const total = selectedIndices.length;
     
@@ -597,6 +670,11 @@
         const cardIdx = selectedIndices.at(i);
         const card = allCards.at(cardIdx);
         const slot = i;
+
+        // 🚀 Обновляем прогресс внутри кнопки
+        const percent = Math.round((i / total) * 100);
+        btnProgressBg.style.width = percent + '%';
+        btnWriteText.textContent = `Запись... ${i + 1} / ${total}`;
 
         const tagHi = (card.tag >> 8) & 0xff;
         const tagLo = card.tag & 0xff;
@@ -639,10 +717,7 @@
         }
 
         writtenSet.add(cardIdx);
-        
-        // Обновляем прогресс после каждой карты
-        const percent = Math.round(((i + 1) / total) * 100);
-        progressFill.style.width = percent + '%';
+        btnProgressBg.style.width = Math.round(((i + 1) / total) * 100) + '%';
       }
 
       await sendCmd(1003, Uint8Array.of(0), true);
@@ -651,25 +726,28 @@
       renderBatches();
       renderCards();
       
-      // Успешное завершение
       showToast('success', 'Запись успешно завершена!');
       
-      // Прокрутка к кнопкам партий
-      if (actionRow.style.display !== 'none') {
-        actionRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // 🚀 Логика авто-перехода
+      const totalBatches = Math.ceil(allCards.length / 8);
+      if (autoAdvanceCheck.checked && totalBatches > 1) {
+        setTimeout(() => {
+           if(!isWriting) selectBatch(currentBatch + 1, true);
+        }, 500);
       } else {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (actionRow.style.display !== 'none') {
+          actionRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
       }
 
     } catch (e) {
       showToast('error', 'Ошибка: ' + e.message);
     } finally {
+      isWriting = false;
+      setUILocked(false);
       updateWriteButton();
-      // Прячем полосу загрузки через секунду после завершения
-      setTimeout(() => {
-        progressContainer.style.display = 'none';
-        progressFill.style.width = '0%';
-      }, 1000);
     }
   });
 </script>
