@@ -42,7 +42,9 @@
     --bar-bg: #ffffff; --shadow: 0 2px 8px rgba(255, 109, 0, 0.08);
   }
 
-  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 110px; transition: background 0.2s, color 0.2s; }
+  /* Увеличен padding снизу, чтобы карточки не уходили под плавающую панель */
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 260px; transition: background 0.2s, color 0.2s; }
+  
   .header-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
   h2 { margin: 0; font-size: 19px; }
   .theme-controls { display: flex; gap: 6px; align-items: center; }
@@ -51,8 +53,22 @@
   
   .panel { background: var(--card); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; border: 1px solid var(--border); box-shadow: var(--shadow); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
   
-  /* 🚀 Липкая панель поиска и партий */
-  #controlsPanel { position: sticky; top: 8px; z-index: 50; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+  /* 🚀 Плавающая панель (Поиск + Партии) */
+  #stickyPanel {
+    position: sticky;
+    bottom: 88px; /* Прилипает ровно над кнопкой записи */
+    z-index: 60;
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 12px;
+    margin-bottom: 14px;
+    border: 1px solid var(--border);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.15); /* Тень вверх для объема */
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    display: none;
+  }
+  #stickyPanel input[type="text"] { margin-top: 0; }
 
   button { background: var(--accent); color: var(--accent-text); border: none; border-radius: var(--btn-radius); padding: 14px 16px; font-weight: 700; font-size: 16px; width: 100%; cursor: pointer; transition: opacity 0.15s; }
   button:disabled { background: var(--input-bg); color: var(--muted); opacity: 0.7; }
@@ -62,7 +78,7 @@
   .btn-row button { margin-top: 0; font-size: 14px; padding: 11px 8px; }
   
   /* 🚀 Горизонтальный скролл партий */
-  .batches-bar { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; margin-top: 10px; padding-bottom: 4px; scrollbar-width: none; -ms-overflow-style: none; scroll-snap-type: x mandatory; }
+  .batches-bar { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; margin-top: 8px; padding-bottom: 4px; scrollbar-width: none; -ms-overflow-style: none; scroll-snap-type: x mandatory; }
   .batches-bar::-webkit-scrollbar { display: none; }
   .batch-btn { width: auto; flex: 0 0 auto; padding: 8px 14px; font-size: 13px; border-radius: 8px; background: var(--input-bg); color: var(--text); border: 1px solid var(--border); scroll-snap-align: start; }
   .batch-btn.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
@@ -103,7 +119,7 @@
   input:checked + .slider { background-color: var(--accent); border-color: var(--accent); }
   input:checked + .slider:before { transform: translateX(20px); background-color: var(--accent-text); }
 
-  #btnTop { position: fixed; right: 16px; bottom: 90px; width: 44px; height: 44px; border-radius: 50%; background: var(--card); color: var(--accent); border: 1.5px solid var(--accent); font-size: 20px; padding: 0; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.35); z-index: 20; }
+  #btnTop { position: fixed; right: 16px; bottom: 240px; width: 44px; height: 44px; border-radius: 50%; background: var(--card); color: var(--accent); border: 1.5px solid var(--accent); font-size: 20px; padding: 0; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.35); z-index: 70; }
 
   /* iOS-style Toast */
   .toast-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 9999; opacity: 0; transition: opacity 0.2s; }
@@ -139,23 +155,28 @@
   <div id="deviceSlots" class="slots-grid" style="display:none;"></div>
 </div>
 
-<!-- 🚀 Липкая панель -->
-<div class="panel" id="controlsPanel">
+<!-- Верхний блок с настройками, который будет уезжать при прокрутке -->
+<div class="panel">
   <div style="font-size:14px; font-weight:600;">2. Выберите JSON-файл с ключами</div>
   <input type="file" id="fileInput" accept=".json,application/json">
-  <input type="text" id="searchInput" placeholder="Поиск по названию или UID..." style="display:none;">
-  <div id="batchesBar" class="batches-bar" style="display:none;"></div>
-  <div id="actionRow" class="btn-row" style="display:none;">
-    <button id="btnNextBatch" type="button" class="secondary">Следующие 8 →</button>
-    <button id="btnClear" type="button" class="secondary">Снять (0/8)</button>
-  </div>
+  
   <!-- 🚀 Тумблер авто-перехода -->
-  <div class="switch-container">
+  <div class="switch-container" id="autoAdvanceRow" style="display:none;">
     <span class="switch-label">Авто-переход к след. партии</span>
     <label class="switch">
       <input type="checkbox" id="autoAdvanceCheck">
       <span class="slider"></span>
     </label>
+  </div>
+</div>
+
+<!-- 🚀 Плавающая панель (прилипает над кнопкой записи) -->
+<div class="panel" id="stickyPanel">
+  <input type="text" id="searchInput" placeholder="Поиск по названию или UID...">
+  <div id="batchesBar" class="batches-bar"></div>
+  <div id="actionRow" class="btn-row">
+    <button id="btnNextBatch" type="button" class="secondary">Следующие 8 →</button>
+    <button id="btnClear" type="button" class="secondary">Снять (0/8)</button>
   </div>
 </div>
 
@@ -181,7 +202,7 @@
   let pendingResolver = null;
   let allCards = [], selectedIndices = [], writtenSet = new Set();
   let currentBatch = 0;
-  let isWriting = false; // 🚀 Флаг блокировки
+  let isWriting = false;
 
   const statusEl = document.getElementById('status');
   const deviceSlotsEl = document.getElementById('deviceSlots');
@@ -200,32 +221,29 @@
   const searchInput = document.getElementById('searchInput');
   const cardsListEl = document.getElementById('cardsList');
   const autoAdvanceCheck = document.getElementById('autoAdvanceCheck');
+  const stickyPanel = document.getElementById('stickyPanel');
+  const autoAdvanceRow = document.getElementById('autoAdvanceRow');
 
   let isLight = localStorage.getItem('cu_theme') === 'light';
   let uiStyle = localStorage.getItem('cu_style') || 'default';
 
-  // Настройка авто-перехода
   autoAdvanceCheck.checked = localStorage.getItem('cu_auto_advance') === 'true';
   autoAdvanceCheck.addEventListener('change', (e) => {
     localStorage.setItem('cu_auto_advance', e.target.checked);
   });
 
-  // --- Всплывающие сообщения (iOS-style) + Вибрация ---
   const svgCheck = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
   const svgCross = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
 
   function showToast(type, message) {
-    // 🚀 Тактильная отдача
     if (navigator.vibrate) {
       if (type === 'success') navigator.vibrate(50);
       if (type === 'error') navigator.vibrate([100, 50, 100]);
     }
-
     const overlay = document.createElement('div');
     overlay.className = 'toast-overlay';
     const iconSvg = type === 'success' ? svgCheck : svgCross;
     const btnText = type === 'success' ? 'Готово' : 'Закрыть';
-    
     overlay.innerHTML = `
       <div class="toast-card">
         <div class="toast-icon ${type}">${iconSvg}</div>
@@ -233,15 +251,12 @@
         <button class="toast-btn">${btnText}</button>
       </div>
     `;
-    
     document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add('show'));
-    
     overlay.querySelector('.toast-btn').addEventListener('click', () => {
       overlay.classList.remove('show');
       setTimeout(() => overlay.remove(), 200);
     });
-    
     if (type === 'success') {
       setTimeout(() => {
         if (document.body.contains(overlay)) {
@@ -282,7 +297,6 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
-  // 🚀 Блокировка интерфейса
   function setUILocked(locked) {
     const els = [btnConnect, btnDisconnect, document.getElementById('fileInput'), searchInput, btnTheme, styleSelect, btnClear, btnNextBatch, autoAdvanceCheck];
     els.forEach(el => { 
@@ -396,7 +410,6 @@
         const resp = await sendCmd(1008, Uint8Array.of(slot, 2), true);
         const nick = (resp.data.length > 0) ? decoder.decode(resp.data).replace(/\0/g, '').trim() : '';
         
-        // 🚀 Красивая визуализация HF-слотов
         const isOccupied = !!nick;
         const iconStyle = isOccupied 
             ? 'background: var(--accent); color: var(--accent-text);' 
@@ -573,7 +586,6 @@
       btn.addEventListener('click', () => { if(!isWriting) selectBatch(b, true); });
       batchesBar.appendChild(btn);
     }
-    // Автоскролл к активной партии
     const activeBtn = batchesBar.querySelector('.batch-btn.active');
     if (activeBtn) {
         activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
@@ -588,9 +600,11 @@
       try {
         allCards = parseJsonCards(JSON.parse(ev.target.result));
         writtenSet.clear();
-        searchInput.style.display = 'block';
-        batchesBar.style.display = 'flex';
-        actionRow.style.display = 'flex';
+        
+        // Показываем плавающую панель и тумблер
+        stickyPanel.style.display = 'block';
+        autoAdvanceRow.style.display = 'flex';
+        
         selectBatch(0, false);
       } catch (err) {
         showToast('error', 'Ошибка JSON: ' + err.message);
@@ -636,7 +650,7 @@
   }
 
   function updateWriteButton() {
-    if (isWriting) return; // Не перебиваем текст во время записи
+    if (isWriting) return;
     const count = selectedIndices.length;
     const totalBatches = Math.ceil(allCards.length / 8);
     btnClear.textContent = 'Снять (' + count + '/8)';
@@ -671,7 +685,6 @@
         const card = allCards.at(cardIdx);
         const slot = i;
 
-        // 🚀 Обновляем прогресс внутри кнопки
         const percent = Math.round((i / total) * 100);
         btnProgressBg.style.width = percent + '%';
         btnWriteText.textContent = `Запись... ${i + 1} / ${total}`;
@@ -728,15 +741,14 @@
       
       showToast('success', 'Запись успешно завершена!');
       
-      // 🚀 Логика авто-перехода
       const totalBatches = Math.ceil(allCards.length / 8);
       if (autoAdvanceCheck.checked && totalBatches > 1) {
         setTimeout(() => {
            if(!isWriting) selectBatch(currentBatch + 1, true);
         }, 500);
       } else {
-        if (actionRow.style.display !== 'none') {
-          actionRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (stickyPanel.style.display !== 'none') {
+          stickyPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
         } else {
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }
