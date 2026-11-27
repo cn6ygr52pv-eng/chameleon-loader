@@ -42,7 +42,6 @@
     --bar-bg: #ffffff; --shadow: 0 2px 8px rgba(255, 109, 0, 0.08);
   }
 
-  /* Уменьшили нижний отступ, так как панель стала компактнее */
   body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; padding-bottom: 210px; transition: background 0.2s, color 0.2s; }
   
   .header-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
@@ -80,7 +79,7 @@
   /* 🚀 ПЛАВАЮЩАЯ ПАНЕЛЬ (Компактная версия) */
   #floatingControls {
     position: fixed;
-    bottom: 78px; /* Высота нижней панели с кнопкой */
+    bottom: 78px;
     left: 0;
     right: 0;
     background: var(--bar-bg);
@@ -93,7 +92,6 @@
     display: none;
   }
 
-  /* Поиск и кнопки в одну строку */
   .search-row { display: flex; gap: 6px; margin-bottom: 6px; }
   .search-row input {
     margin: 0;
@@ -125,11 +123,8 @@
     flex-shrink: 0;
     cursor: pointer;
   }
-  .compact-btn:disabled {
-    opacity: 0.5;
-  }
+  .compact-btn:disabled { opacity: 0.5; }
 
-  /* Горизонтальный скролл партий */
   .batches-bar { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; padding-bottom: 2px; scrollbar-width: none; -ms-overflow-style: none; scroll-snap-type: x mandatory; }
   .batches-bar::-webkit-scrollbar { display: none; }
   .batch-btn { width: auto; flex: 0 0 auto; padding: 6px 12px; font-size: 12px; border-radius: 6px; background: var(--input-bg); color: var(--text); border: 1px solid var(--border); scroll-snap-align: start; font-weight: 600; cursor: pointer; }
@@ -137,12 +132,10 @@
   .batch-btn.done { border-color: var(--accent); color: var(--accent); }
   .batch-btn.active.done { color: var(--accent-text); }
 
-  /* 🚀 Прогресс записи прямо в кнопке */
   #btnWrite { position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; }
   #btnProgressBg { position: absolute; top: 0; left: 0; bottom: 0; width: 0%; background: rgba(0,0,0,0.15); transition: width 0.2s ease; z-index: 0; }
   #btnWriteText { position: relative; z-index: 1; }
 
-  /* 🚀 iOS Switch для авто-перехода */
   .switch-container { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding: 0 4px; }
   .switch-label { font-size: 14px; color: var(--text); font-weight: 500; }
   .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
@@ -153,6 +146,24 @@
   input:checked + .slider:before { transform: translateX(20px); background-color: var(--accent-text); }
 
   #btnTop { position: fixed; right: 16px; bottom: 230px; width: 44px; height: 44px; border-radius: 50%; background: var(--card); color: var(--accent); border: 1.5px solid var(--accent); font-size: 20px; padding: 0; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.35); z-index: 70; }
+
+  /* 🚀 Индикатор батареи */
+  #batteryIndicator {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--input-bg);
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+  }
+  #batteryIndicator svg { width: 18px; height: 18px; flex-shrink: 0; }
+  #batteryPercent { min-width: 32px; text-align: right; }
+  .battery-critical { color: var(--danger) !important; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
   /* iOS-style Toast */
   .toast-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 9999; opacity: 0; transition: opacity 0.2s; }
@@ -182,13 +193,21 @@
 </div>
 
 <div class="panel">
-  <button id="btnConnect" type="button">1. Подключить Chameleon Ultra</button>
+  <div style="display: flex; gap: 8px; align-items: center;">
+    <button id="btnConnect" type="button" style="flex: 1;">1. Подключить Chameleon Ultra</button>
+    <div id="batteryIndicator">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="1" y="6" width="18" height="12" rx="2" ry="2"></rect>
+        <line x1="23" y1="10" x2="23" y2="14"></line>
+      </svg>
+      <span id="batteryPercent">--%</span>
+    </div>
+  </div>
   <button id="btnDisconnect" type="button" class="danger" style="display:none;">Отключиться от устройства</button>
   <div id="status" style="margin-top:8px; font-size:13px; color:var(--accent);">Готов к работе</div>
   <div id="deviceSlots" class="slots-grid" style="display:none;"></div>
 </div>
 
-<!-- Верхний блок с выбором файла, уезжает при скролле -->
 <div class="panel">
   <div style="font-size:14px; font-weight:600;">2. Выберите JSON-файл с ключами</div>
   <input type="file" id="fileInput" accept=".json,application/json">
@@ -206,7 +225,6 @@
 
 <button id="btnTop" type="button" title="Наверх">↑</button>
 
-<!-- 🚀 Компактная плавающая панель -->
 <div id="floatingControls">
   <div class="search-row">
     <input type="text" id="searchInput" placeholder="Поиск по названию или UID...">
@@ -235,6 +253,7 @@
   let allCards = [], selectedIndices = [], writtenSet = new Set();
   let currentBatch = 0;
   let isWriting = false;
+  let batteryPollTimer = null;
 
   const statusEl = document.getElementById('status');
   const deviceSlotsEl = document.getElementById('deviceSlots');
@@ -254,6 +273,10 @@
   const autoAdvanceCheck = document.getElementById('autoAdvanceCheck');
   const floatingControls = document.getElementById('floatingControls');
   const autoAdvanceRow = document.getElementById('autoAdvanceRow');
+
+  // 🚀 Новые элементы для батареи
+  const batteryIndicator = document.getElementById('batteryIndicator');
+  const batteryPercent = document.getElementById('batteryPercent');
 
   let isLight = localStorage.getItem('cu_theme') === 'light';
   let uiStyle = localStorage.getItem('cu_style') || 'default';
@@ -431,6 +454,49 @@
     return res;
   }
 
+  // 🚀 Получение и отображение уровня заряда батареи
+  async function updateBatteryLevel() {
+    if (!bleDevice || !bleDevice.gatt || !bleDevice.gatt.connected) return;
+    try {
+      // Команда 1025: GET_BATTERY_INFO
+      // Ответ: 3 байта — voltage[2] (big-endian) + percentage[1]
+      const res = await sendCmd(1025, null, true);
+      if (res.data && res.data.length >= 3) {
+        const voltage = (res.data[0] << 8) | res.data[1];
+        const percent = res.data[2];
+
+        batteryPercent.textContent = percent + '%';
+        batteryIndicator.style.display = 'flex';
+
+        // Красим индикатор в зависимости от заряда
+        batteryIndicator.classList.remove('battery-critical');
+        if (percent <= 15) {
+          batteryIndicator.classList.add('battery-critical');
+        }
+      }
+    } catch (e) {
+      console.warn('Не удалось получить уровень заряда:', e.message);
+    }
+  }
+
+  // Запуск периодического опроса батареи
+  function startBatteryPolling() {
+    stopBatteryPolling();
+    // Первый запрос с задержкой 5 секунд (рекомендация прошивки)
+    setTimeout(() => {
+      updateBatteryLevel();
+      // Далее опрашиваем каждые 60 секунд
+      batteryPollTimer = setInterval(updateBatteryLevel, 60000);
+    }, 5000);
+  }
+
+  function stopBatteryPolling() {
+    if (batteryPollTimer) {
+      clearInterval(batteryPollTimer);
+      batteryPollTimer = null;
+    }
+  }
+
   async function refreshDeviceSlots() {
     deviceSlotsEl.style.display = 'grid';
     deviceSlotsEl.innerHTML = '<div style="grid-column:1/-1;font-size:12px;color:var(--muted);">Чтение слотов с устройства...</div>';
@@ -462,6 +528,8 @@
     txChar = null;
     rxChar = null;
     rxBuffer = new Uint8Array(0);
+    stopBatteryPolling(); // 🚀 Останавливаем опрос батареи
+    batteryIndicator.style.display = 'none'; // 🚀 Скрываем индикатор
     btnConnect.style.display = 'block';
     btnDisconnect.style.display = 'none';
     deviceSlotsEl.style.display = 'none';
@@ -501,6 +569,7 @@
       btnConnect.style.display = 'none';
       btnDisconnect.style.display = 'block';
       await refreshDeviceSlots();
+      startBatteryPolling(); // 🚀 Запускаем опрос батареи
       updateWriteButton();
     } catch (e) {
       statusEl.textContent = 'Ошибка: ' + e.message;
@@ -684,10 +753,9 @@
     const count = selectedIndices.length;
     const totalBatches = Math.ceil(allCards.length / 8);
     
-    // 🚀 Обновляем компактные кнопки вместо огромных текстовых
     btnClear.title = 'Снять (' + count + '/8)';
     if (count > 0) {
-       btnClear.style.color = 'var(--danger)'; // Подсветим крестик красным, если есть что снимать
+       btnClear.style.color = 'var(--danger)';
     } else {
        btnClear.style.color = 'var(--text)';
     }
@@ -789,7 +857,6 @@
            if(!isWriting) selectBatch(currentBatch + 1, true);
         }, 500);
       } else {
-        // Скроллим к первой выбранной карточке или наверх, чтобы плавающая панель не мешала
         const firstSelected = cardsListEl.querySelector('.card-item.selected');
         if (firstSelected) {
           firstSelected.scrollIntoView({ behavior: 'smooth', block: 'center' });
